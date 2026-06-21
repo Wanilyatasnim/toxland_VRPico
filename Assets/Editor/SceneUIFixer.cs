@@ -159,26 +159,36 @@ public class SceneUIFixer : EditorWindow
                     FixControllerBindings(controller, isLeft);
                 }
 
+                // Resolve namespaces dynamically using AppDomain assembly scan to avoid null type crashes
+                System.Type rayType = GetTypeFromAssemblies("UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor")
+                                   ?? GetTypeFromAssemblies("UnityEngine.XR.Interaction.Toolkit.XRRayInteractor");
+                                   
+                System.Type visualType = GetTypeFromAssemblies("UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.XRInteractorLineVisual")
+                                      ?? GetTypeFromAssemblies("UnityEngine.XR.Interaction.Toolkit.XRInteractorLineVisual");
+
+                if (rayType == null || visualType == null)
+                {
+                    Debug.LogError($"❌ Could not resolve XRRayInteractor ({rayType != null}) or XRInteractorLineVisual ({visualType != null}) types from assemblies. Skipping controller installation.");
+                    continue;
+                }
+
                 // 1. Destroy any existing raycaster/interactor components first to start clean
                 var oldRayInteractors = controller.GetComponents<Component>();
                 foreach (var c in oldRayInteractors)
                 {
-                    if (c != null && (c.GetType().Name.Contains("RayInteractor") || 
-                                      c.GetType().Name.Contains("LineVisual") || 
-                                      c.GetType().Name.Contains("LineRenderer")))
+                    if (c != null && (c.GetType() == rayType || 
+                                      c.GetType() == visualType || 
+                                      c.GetType() == typeof(LineRenderer)))
                     {
-                        Debug.Log($"   🔧 Destroying old/deprecated component '{c.GetType().Name}' on '{controller.name}'...");
+                        Debug.Log($"   🔧 Destroying old component '{c.GetType().Name}' on '{controller.name}'...");
                         Object.DestroyImmediate(c);
                     }
                 }
 
-                // 2. Add the correct XRI 3.x interactor components
-                Debug.Log($"   🔧 Adding correct XRI 3.x components to '{controller.name}'...");
+                // 2. Add the correct XRI components
+                Debug.Log($"   🔧 Adding correct XRI components to '{controller.name}'...");
                 
-                // Add XRRayInteractor (XRI 3.x namespace)
-                System.Type rayType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor, Unity.XR.Interaction.Toolkit");
-                if (rayType == null) rayType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.XRRayInteractor, Unity.XR.Interaction.Toolkit"); // fallback
-                
+                // Add XRRayInteractor
                 var rayInteractor = controller.gameObject.AddComponent(rayType);
                 
                 // Add LineRenderer
@@ -187,19 +197,26 @@ public class SceneUIFixer : EditorWindow
                 lineRenderer.endWidth = 0.01f;
                 lineRenderer.useWorldSpace = true;
                 
-                // Add XRInteractorLineVisual (XRI 3.x namespace)
-                System.Type visualType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.XRInteractorLineVisual, Unity.XR.Interaction.Toolkit");
-                if (visualType == null) visualType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.XRInteractorLineVisual, Unity.XR.Interaction.Toolkit"); // fallback
-                
+                // Add XRInteractorLineVisual
                 var lineVisual = controller.gameObject.AddComponent(visualType);
                 
-                // Bind LineRenderer to LineVisual via SerializedObject to be safe
-                SerializedObject soVisual = new SerializedObject(lineVisual);
-                var lrProp = soVisual.FindProperty("m_LineRenderer");
+                // Bind LineRenderer to LineVisual
+                var lrProp = visualType.GetProperty("lineRenderer", BindingFlags.Public | BindingFlags.Instance);
                 if (lrProp != null)
                 {
-                    lrProp.objectReferenceValue = lineRenderer;
-                    soVisual.ApplyModifiedProperties();
+                    lrProp.SetValue(lineVisual, lineRenderer);
+                    Debug.Log("   ✅ Bound LineRenderer to XRInteractorLineVisual property.");
+                }
+                else
+                {
+                    SerializedObject soVisual = new SerializedObject(lineVisual);
+                    var serializedLr = soVisual.FindProperty("m_LineRenderer");
+                    if (serializedLr != null)
+                    {
+                        serializedLr.objectReferenceValue = lineRenderer;
+                        soVisual.ApplyModifiedProperties();
+                        Debug.Log("   ✅ Bound LineRenderer to XRInteractorLineVisual serialized field.");
+                    }
                 }
                 
                 Debug.Log($"   ✅ Re-initialization of '{controller.name}' complete.");
@@ -218,6 +235,16 @@ public class SceneUIFixer : EditorWindow
         }
 
         Debug.Log("========== SCENE UI FIXES COMPLETE ==========");
+    }
+
+    private static System.Type GetTypeFromAssemblies(string typeName)
+    {
+        foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+        {
+            var type = assembly.GetType(typeName);
+            if (type != null) return type;
+        }
+        return null;
     }
 
     private static void ApplyInputModulePreset(XRUIInputModule xrui)
