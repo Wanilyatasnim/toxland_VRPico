@@ -1,113 +1,160 @@
 using UnityEngine;
 
 /// <summary>
-/// Simple desktop WASD + mouse-look locomotion for editor/PC testing.
-/// Attach this to the XR Origin (VR) or a parent camera GameObject.
-/// Press RIGHT-CLICK to capture mouse and look around.
-/// Use WASD to move, Q/E to go up/down.
-/// This script is active only in the editor or on non-VR standalone builds.
+/// Desktop WASD + mouse-look locomotion for editor / PC testing without a VR headset.
+/// Automatically attaches itself to the XR Origin (VR) at startup — no manual setup needed.
+///
+/// Controls:
+///   Right-click drag  – look around
+///   W / S             – move forward / backward
+///   A / D             – strafe left / right
+///   Q / E             – move up / down
+///   Left Shift        – sprint (2× speed)
+///   Escape            – release mouse cursor
 /// </summary>
+[DisallowMultipleComponent]
 public class DesktopLocomotion : MonoBehaviour
 {
+    // ── Inspector ──────────────────────────────────────────────
     [Header("Movement")]
-    [Tooltip("Movement speed in metres per second")]
-    public float moveSpeed = 3f;
-
-    [Tooltip("Sprint speed multiplier while holding Shift")]
+    public float moveSpeed        = 3f;
     public float sprintMultiplier = 2f;
 
     [Header("Mouse Look")]
-    [Tooltip("Mouse sensitivity")]
     public float mouseSensitivity = 2f;
 
-    [Header("Camera Reference")]
-    [Tooltip("The camera to rotate vertically. Leave blank to auto-detect Camera.main.")]
+    [Header("Optional Camera Reference")]
+    [Tooltip("Camera to pitch vertically. Auto-detected from Camera.main if left blank.")]
     public Transform cameraTransform;
 
-    // Internal state
-    private float _pitch = 0f;
-    private bool _mouseCapture = false;
+    // ── Internal ──────────────────────────────────────────────
+    private float _pitch       = 0f;
+    private bool  _mouseActive = false;
 
-    void Start()
+    // ── Auto-attach ───────────────────────────────────────────
+    /// <summary>
+    /// Called once at runtime before the first scene Update.
+    /// Finds or creates the locomotion component on the XR Origin.
+    /// </summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void AutoAttach()
     {
-        // Auto-find the main camera if not assigned
-        if (cameraTransform == null && Camera.main != null)
-            cameraTransform = Camera.main.transform;
+        // Find XR Origin (VR) by name first, then by common fallbacks
+        GameObject origin = GameObject.Find("XR Origin (VR)");
+        if (origin == null) origin = GameObject.Find("XR Origin");
+        if (origin == null) origin = GameObject.Find("XROrigin");
+
+        // If still not found, try to locate the main camera's top-level parent
+        if (origin == null && Camera.main != null)
+            origin = Camera.main.transform.root.gameObject;
+
+        if (origin == null)
+        {
+            Debug.LogWarning("[DesktopLocomotion] Could not find XR Origin in the scene. WASD will not work.");
+            return;
+        }
+
+        // Only add if missing
+        if (origin.GetComponent<DesktopLocomotion>() == null)
+        {
+            var loco = origin.AddComponent<DesktopLocomotion>();
+            Debug.Log($"[DesktopLocomotion] Auto-attached to '{origin.name}'. " +
+                      "Right-click + drag to look, WASD to move.");
+        }
     }
 
-    void Update()
+    // ── MonoBehaviour ─────────────────────────────────────────
+    private void Awake()
     {
-        // Toggle mouse capture with right-click
+        // Try to resolve camera if not already set
+        if (cameraTransform == null && Camera.main != null)
+            cameraTransform = Camera.main.transform;
+
+        // Initialise pitch from current camera angle so it doesn't snap
+        if (cameraTransform != null)
+        {
+            float euler = cameraTransform.localEulerAngles.x;
+            _pitch = euler > 180f ? euler - 360f : euler;
+        }
+    }
+
+    private void Update()
+    {
+        HandleMouseCapture();
+        HandleMouseLook();
+        HandleMovement();
+    }
+
+    private void HandleMouseCapture()
+    {
+        // Activate mouse-look on right-click press
         if (Input.GetMouseButtonDown(1))
         {
-            _mouseCapture = true;
+            _mouseActive = true;
             Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            Cursor.visible   = false;
         }
-        if (Input.GetKeyDown(KeyCode.Escape))
+
+        // Release on right-click release or Escape
+        if (Input.GetMouseButtonUp(1) || Input.GetKeyDown(KeyCode.Escape))
         {
-            _mouseCapture = false;
+            _mouseActive     = false;
             Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            Cursor.visible   = true;
         }
+    }
 
-        // --- Mouse look (only when right mouse is held) ---
-        if (_mouseCapture && Input.GetMouseButton(1))
+    private void HandleMouseLook()
+    {
+        if (!_mouseActive) return;
+
+        float mouseX = Input.GetAxisRaw("Mouse X") * mouseSensitivity;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * mouseSensitivity;
+
+        // Yaw the whole XR Origin around world-up
+        transform.Rotate(Vector3.up, mouseX, Space.World);
+
+        // Pitch only the camera
+        if (cameraTransform != null)
         {
-            float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-            float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-
-            // Yaw the whole body (XR Origin) on the Y axis
-            transform.Rotate(Vector3.up, mouseX, Space.World);
-
-            // Pitch only the camera on its local X axis
-            if (cameraTransform != null)
-            {
-                _pitch -= mouseY;
-                _pitch = Mathf.Clamp(_pitch, -80f, 80f);
-                // Only rotate the camera's X; keep the body yaw separate
-                Vector3 camEuler = cameraTransform.localEulerAngles;
-                camEuler.x = _pitch;
-                cameraTransform.localEulerAngles = camEuler;
-            }
+            _pitch  = Mathf.Clamp(_pitch - mouseY, -80f, 80f);
+            Vector3 camEuler = cameraTransform.localEulerAngles;
+            camEuler.x = _pitch;
+            cameraTransform.localEulerAngles = camEuler;
         }
-        else if (!Input.GetMouseButton(1) && _mouseCapture)
-        {
-            // Release capture if right mouse released
-            _mouseCapture = false;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
+    }
 
-        // --- WASD Movement ---
-        float speed = moveSpeed * (Input.GetKey(KeyCode.LeftShift) ? sprintMultiplier : 1f);
-
+    private void HandleMovement()
+    {
         float h = Input.GetAxis("Horizontal");   // A / D
         float v = Input.GetAxis("Vertical");     // W / S
 
-        // Move relative to the body's facing direction (ignore camera pitch for horizontal move)
-        Vector3 forward = transform.forward;
-        Vector3 right   = transform.right;
+        // Nothing pressed — skip
+        bool hasVertical = Mathf.Abs(v) > 0.01f;
+        bool hasHorizontal = Mathf.Abs(h) > 0.01f;
+        bool hasVerticalKey = Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.E);
 
-        // Flatten to ground plane so W always moves forward, not sky/ground
-        forward.y = 0f;
-        right.y   = 0f;
-        forward.Normalize();
-        right.Normalize();
+        if (!hasVertical && !hasHorizontal && !hasVerticalKey) return;
+
+        float speed = moveSpeed * (Input.GetKey(KeyCode.LeftShift) ? sprintMultiplier : 1f);
+
+        // Keep horizontal movement flat relative to the body's yaw (ignores camera pitch)
+        Vector3 forward = transform.forward; forward.y = 0f; forward.Normalize();
+        Vector3 right   = transform.right;   right.y   = 0f; right.Normalize();
 
         Vector3 move = (forward * v + right * h) * speed * Time.deltaTime;
 
-        // Q / E for vertical movement
+        // Vertical
         if (Input.GetKey(KeyCode.E)) move.y += speed * Time.deltaTime;
         if (Input.GetKey(KeyCode.Q)) move.y -= speed * Time.deltaTime;
 
         transform.position += move;
     }
 
-    void OnDisable()
+    private void OnDisable()
     {
-        // Always release mouse when disabled
+        // Always release cursor when the component is disabled
         Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        Cursor.visible   = true;
     }
 }
