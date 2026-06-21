@@ -6,6 +6,7 @@ using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.Interaction.Toolkit.Inputs;
 using UnityEditor.Presets;
+using System.Reflection;
 using System.Collections.Generic;
 
 public class SceneUIFixer : EditorWindow
@@ -48,6 +49,7 @@ public class SceneUIFixer : EditorWindow
             }
             
             ApplyInputModulePreset(xrui);
+            InspectInputModule(xrui);
             Debug.Log("✅ EventSystem configuration verified.");
         }
 
@@ -206,7 +208,6 @@ public class SceneUIFixer : EditorWindow
     {
         Debug.Log("🔧 Verifying XRUIInputModule preset bindings...");
         
-        // Find default preset for XRUIInputModule
         string[] guids = AssetDatabase.FindAssets("XRI Default XR UI Input Module t:Preset");
         if (guids.Length > 0)
         {
@@ -228,6 +229,39 @@ public class SceneUIFixer : EditorWindow
         else
         {
             Debug.LogError("❌ Could not find 'XRI Default XR UI Input Module' preset in the project!");
+        }
+    }
+
+    private static void InspectInputModule(XRUIInputModule xrui)
+    {
+        Debug.Log("🔧 Inspecting XRUIInputModule properties via Reflection...");
+        
+        // Let's print out all properties that end with "Action" or "Actions" or are related to inputs
+        PropertyInfo[] properties = xrui.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var p in properties)
+        {
+            if (p.PropertyType.Name.Contains("InputAction") || p.Name.ToLower().Contains("action"))
+            {
+                try
+                {
+                    object val = p.GetValue(xrui);
+                    string details = val != null ? val.ToString() : "null";
+                    
+                    // If it is an InputActionProperty, let's see if it has a reference
+                    if (val != null && val.GetType().Name == "InputActionProperty")
+                    {
+                        var refProp = val.GetType().GetProperty("reference");
+                        if (refProp != null)
+                        {
+                            object refVal = refProp.GetValue(val);
+                            details = refVal != null ? refVal.ToString() : "EMPTY REFERENCE";
+                        }
+                    }
+                    
+                    Debug.Log($"   [XRUIInputModule] {p.Name} = {details}");
+                }
+                catch {}
+            }
         }
     }
 
