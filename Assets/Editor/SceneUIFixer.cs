@@ -15,7 +15,7 @@ public class SceneUIFixer : EditorWindow
         Debug.Log("========== STARTING SCENE UI FIXES ==========");
 
         // 1. Fix EventSystem
-        var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include);
         GameObject eventSystemGo = null;
         
         if (eventSystems.Length == 0)
@@ -48,7 +48,7 @@ public class SceneUIFixer : EditorWindow
         }
 
         // 2. Fix Canvases
-        var canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        var canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include);
         foreach (var canvas in canvases)
         {
             // Remove missing scripts (Oculus components, etc.)
@@ -128,7 +128,7 @@ public class SceneUIFixer : EditorWindow
         }
 
         // 4. Fix XR Controllers (Add lasers if they only have ActionBasedController)
-        var controllers = Object.FindObjectsByType<ActionBasedController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        var controllers = Object.FindObjectsByType<ActionBasedController>(FindObjectsInactive.Include);
         if (controllers.Length == 0)
         {
             Debug.LogWarning("⚠️ No ActionBasedController components found in the scene.");
@@ -176,7 +176,7 @@ public class SceneUIFixer : EditorWindow
         // 5. Scan & Output XR Origin hierarchy to help diagnose controllers
         if (origin != null)
         {
-            Debug.Log($"ℹ️ [HIERARCHY] Found XR Origin: '{origin.name}'. Scanning children for controllers... ");
+            Debug.Log($"ℹ️ [HIERARCHY] Found XR Origin: '{origin.name}'. Scanning children for controllers...");
             ScanHierarchy(origin.transform, "  ");
         }
         else

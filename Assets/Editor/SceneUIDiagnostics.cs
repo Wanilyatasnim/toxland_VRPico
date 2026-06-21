@@ -12,8 +12,8 @@ public class SceneUIDiagnostics : EditorWindow
     {
         Debug.Log("========== STARTING SCENE UI DIAGNOSTICS ==========");
 
-        // 1. Check EventSystem
-        var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None);
+        // 1. Check EventSystem (Find including inactive objects, without obsolete sort parameter)
+        var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include);
         if (eventSystems.Length == 0)
         {
             Debug.LogError("❌ [DIAGNOSTIC] No EventSystem found in the scene! UI interaction will not work.");
@@ -44,8 +44,8 @@ public class SceneUIDiagnostics : EditorWindow
             }
         }
 
-        // 2. Check Canvases
-        var canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        // 2. Check Canvases (Find including inactive objects, without obsolete sort parameter)
+        var canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include);
         if (canvases.Length == 0)
         {
             Debug.LogWarning("⚠️ [DIAGNOSTIC] No Canvas components found in the scene.");
@@ -95,27 +95,32 @@ public class SceneUIDiagnostics : EditorWindow
         }
 
         // 3. Check XR Ray Interactors
-        var rayInteractors = Object.FindObjectsByType<XRRayInteractor>(FindObjectsSortMode.None);
-        if (rayInteractors.Length == 0)
+        // Since XRRayInteractor is under Unity's XRI namespace, we can search dynamically by type.
+        // We'll search using a generic component search to handle namespaces flexibly.
+        var allComponents = Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include);
+        int rayInteractorCount = 0;
+        foreach (var c in allComponents)
         {
-            Debug.LogWarning("⚠️ [DIAGNOSTIC] No XRRayInteractor found in the scene! Are the controller lasers configured?");
-        }
-        else
-        {
-            foreach (var ri in rayInteractors)
+            if (c != null && c.GetType().Name == "XRRayInteractor")
             {
-                Debug.Log($"✅ [DIAGNOSTIC] Found XRRayInteractor on GameObject: '{ri.name}' (Active: {ri.gameObject.activeInHierarchy})", ri);
+                rayInteractorCount++;
+                Debug.Log($"✅ [DIAGNOSTIC] Found XRRayInteractor component on GameObject: '{c.name}' (Active: {c.gameObject.activeInHierarchy})", c);
                 
-                var lineVisual = ri.GetComponent<XRInteractorLineVisual>();
+                var lineVisual = c.GetComponent("XRInteractorLineVisual");
                 if (lineVisual == null)
                 {
-                    Debug.LogWarning($"  ⚠️ '{ri.name}' has no XRInteractorLineVisual, so the laser pointer will be invisible in the scene.", ri);
+                    Debug.LogWarning($"  ⚠️ '{c.name}' has no XRInteractorLineVisual, so the laser pointer will be invisible in the scene.", c);
                 }
                 else
                 {
-                    Debug.Log($"  ✅ '{ri.name}' has XRInteractorLineVisual (laser is visible).", ri);
+                    Debug.Log($"  ✅ '{c.name}' has XRInteractorLineVisual (laser is visible).", c);
                 }
             }
+        }
+
+        if (rayInteractorCount == 0)
+        {
+            Debug.LogWarning("⚠️ [DIAGNOSTIC] No XRRayInteractor found in the scene! Are the controller lasers configured?");
         }
 
         Debug.Log("========== SCENE UI DIAGNOSTICS COMPLETE ==========");
