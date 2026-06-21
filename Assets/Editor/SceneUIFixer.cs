@@ -133,7 +133,7 @@ public class SceneUIFixer : EditorWindow
             }
         }
 
-        // 4. Fix XR Controllers (Add lasers if they only have ActionBasedController)
+        // 4. Fix XR Controllers (Clean old interactors and add new XRI 3.x ones)
         var controllers = Object.FindObjectsByType<ActionBasedController>(FindObjectsInactive.Include);
         if (controllers.Length == 0)
         {
@@ -143,7 +143,7 @@ public class SceneUIFixer : EditorWindow
         {
             foreach (var controller in controllers)
             {
-                Debug.Log($"🔧 Checking controller: '{controller.name}'");
+                Debug.Log($"🔧 Re-initializing XRI 3.x Interactors on controller: '{controller.name}'");
                 
                 // Let's print out if input references are set or empty
                 PrintControllerActions(controller);
@@ -159,34 +159,50 @@ public class SceneUIFixer : EditorWindow
                     FixControllerBindings(controller, isLeft);
                 }
 
-                // Let's look for any type of Interactor
-                bool hasInteractor = false;
-                var components = controller.GetComponents<Component>();
-                foreach (var c in components)
+                // 1. Destroy any existing raycaster/interactor components first to start clean
+                var oldRayInteractors = controller.GetComponents<Component>();
+                foreach (var c in oldRayInteractors)
                 {
-                    if (c != null && c.GetType().Name.Contains("Interactor"))
+                    if (c != null && (c.GetType().Name.Contains("RayInteractor") || 
+                                      c.GetType().Name.Contains("LineVisual") || 
+                                      c.GetType().Name.Contains("LineRenderer")))
                     {
-                        hasInteractor = true;
-                        break;
+                        Debug.Log($"   🔧 Destroying old/deprecated component '{c.GetType().Name}' on '{controller.name}'...");
+                        Object.DestroyImmediate(c);
                     }
                 }
 
-                if (!hasInteractor)
+                // 2. Add the correct XRI 3.x interactor components
+                Debug.Log($"   🔧 Adding correct XRI 3.x components to '{controller.name}'...");
+                
+                // Add XRRayInteractor (XRI 3.x namespace)
+                System.Type rayType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor, Unity.XR.Interaction.Toolkit");
+                if (rayType == null) rayType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.XRRayInteractor, Unity.XR.Interaction.Toolkit"); // fallback
+                
+                var rayInteractor = controller.gameObject.AddComponent(rayType);
+                
+                // Add LineRenderer
+                var lineRenderer = controller.gameObject.AddComponent<LineRenderer>();
+                lineRenderer.startWidth = 0.01f;
+                lineRenderer.endWidth = 0.01f;
+                lineRenderer.useWorldSpace = true;
+                
+                // Add XRInteractorLineVisual (XRI 3.x namespace)
+                System.Type visualType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.XRInteractorLineVisual, Unity.XR.Interaction.Toolkit");
+                if (visualType == null) visualType = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.XRInteractorLineVisual, Unity.XR.Interaction.Toolkit"); // fallback
+                
+                var lineVisual = controller.gameObject.AddComponent(visualType);
+                
+                // Bind LineRenderer to LineVisual via SerializedObject to be safe
+                SerializedObject soVisual = new SerializedObject(lineVisual);
+                var lrProp = soVisual.FindProperty("m_LineRenderer");
+                if (lrProp != null)
                 {
-                    Debug.Log($"🔧 Controller '{controller.name}' has no Interactor. Adding XRRayInteractor components...");
-                    var rayInteractor = controller.gameObject.AddComponent<XRRayInteractor>();
-                    var lineRenderer = controller.gameObject.AddComponent<LineRenderer>();
-                    lineRenderer.startWidth = 0.01f;
-                    lineRenderer.endWidth = 0.01f;
-                    lineRenderer.useWorldSpace = true;
-                    var lineVisual = controller.gameObject.AddComponent<XRInteractorLineVisual>();
-                    
-                    Debug.Log($"✅ Added XRRayInteractor, LineRenderer, and XRInteractorLineVisual to '{controller.name}'.");
+                    lrProp.objectReferenceValue = lineRenderer;
+                    soVisual.ApplyModifiedProperties();
                 }
-                else
-                {
-                    Debug.Log($"✅ Controller '{controller.name}' already has an Interactor component.");
-                }
+                
+                Debug.Log($"   ✅ Re-initialization of '{controller.name}' complete.");
             }
         }
 
@@ -236,7 +252,6 @@ public class SceneUIFixer : EditorWindow
     {
         Debug.Log("🔧 Inspecting XRUIInputModule properties via Reflection...");
         
-        // Let's print out all properties that end with "Action" or "Actions" or are related to inputs
         PropertyInfo[] properties = xrui.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
         foreach (var p in properties)
         {
@@ -247,7 +262,6 @@ public class SceneUIFixer : EditorWindow
                     object val = p.GetValue(xrui);
                     string details = val != null ? val.ToString() : "null";
                     
-                    // If it is an InputActionProperty, let's see if it has a reference
                     if (val != null && val.GetType().Name == "InputActionProperty")
                     {
                         var refProp = val.GetType().GetProperty("reference");
