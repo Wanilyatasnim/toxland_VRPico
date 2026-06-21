@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.Interaction.Toolkit.Inputs;
+using UnityEditor.Presets;
 using System.Collections.Generic;
 
 public class SceneUIFixer : EditorWindow
@@ -23,7 +24,8 @@ public class SceneUIFixer : EditorWindow
             Debug.Log("🔧 Creating new EventSystem GameObject...");
             eventSystemGo = new GameObject("EventSystem");
             eventSystemGo.AddComponent<EventSystem>();
-            eventSystemGo.AddComponent<XRUIInputModule>();
+            var xrui = eventSystemGo.AddComponent<XRUIInputModule>();
+            ApplyInputModulePreset(xrui);
             Debug.Log("✅ Created EventSystem with XRUIInputModule.");
         }
         else
@@ -42,8 +44,10 @@ public class SceneUIFixer : EditorWindow
             if (xrui == null)
             {
                 Debug.Log("🔧 Adding XRUIInputModule...");
-                eventSystemGo.AddComponent<XRUIInputModule>();
+                xrui = eventSystemGo.AddComponent<XRUIInputModule>();
             }
+            
+            ApplyInputModulePreset(xrui);
             Debug.Log("✅ EventSystem configuration verified.");
         }
 
@@ -196,6 +200,35 @@ public class SceneUIFixer : EditorWindow
         }
 
         Debug.Log("========== SCENE UI FIXES COMPLETE ==========");
+    }
+
+    private static void ApplyInputModulePreset(XRUIInputModule xrui)
+    {
+        Debug.Log("🔧 Verifying XRUIInputModule preset bindings...");
+        
+        // Find default preset for XRUIInputModule
+        string[] guids = AssetDatabase.FindAssets("XRI Default XR UI Input Module t:Preset");
+        if (guids.Length > 0)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+            Preset preset = AssetDatabase.LoadAssetAtPath<Preset>(path);
+            if (preset != null)
+            {
+                if (preset.CanBeAppliedTo(xrui))
+                {
+                    preset.ApplyTo(xrui);
+                    Debug.Log("✅ Applied 'XRI Default XR UI Input Module' preset to EventSystem's XRUIInputModule.");
+                }
+                else
+                {
+                    Debug.LogWarning("⚠️ Found UI input module preset, but it cannot be applied to this component.");
+                }
+            }
+        }
+        else
+        {
+            Debug.LogError("❌ Could not find 'XRI Default XR UI Input Module' preset in the project!");
+        }
     }
 
     private static void FixControllerBindings(ActionBasedController controller, bool isLeft)
