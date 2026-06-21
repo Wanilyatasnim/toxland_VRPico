@@ -1,0 +1,14 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Events;
+public class BtnOKManager : MonoBehaviour
+{
+    public UnityEvent ExtraMoveEvent;
+
+    // Start is called before the first frame update
+    public void OnBtnOKClicked()
+    {
+        ExtraMoveEvent.Invoke();
+    }
+}
