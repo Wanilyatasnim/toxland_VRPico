@@ -173,7 +173,6 @@ public class SceneUIFixer : EditorWindow
                 }
 
                 // 1. Destroy components in dependency order: LineVisual -> Interactor -> LineRenderer
-                // (Visual depends on LineRenderer, so visual must be destroyed first)
                 var oldVisual = controller.GetComponent(visualType);
                 if (oldVisual != null)
                 {
@@ -200,6 +199,9 @@ public class SceneUIFixer : EditorWindow
                 
                 // Add XRRayInteractor
                 var rayInteractor = controller.gameObject.AddComponent(rayType);
+                
+                // Inspect and bind XRRayInteractor properties using reflection
+                InspectAndFixRayInteractor(rayInteractor, rayType, controller.name.ToLower().Contains("left"));
                 
                 // Add LineRenderer
                 var lineRenderer = controller.gameObject.AddComponent<LineRenderer>();
@@ -255,6 +257,91 @@ public class SceneUIFixer : EditorWindow
             if (type != null) return type;
         }
         return null;
+    }
+
+    private static void InspectAndFixRayInteractor(Component rayInteractor, System.Type rayType, bool isLeft)
+    {
+        Debug.Log($"   🔧 Inspecting and binding XRRayInteractor properties for '{rayInteractor.name}'...");
+        
+        string prefix = isLeft ? "XRI Left" : "XRI Right";
+        
+        // Find input actions asset to extract references
+        string[] guids = AssetDatabase.FindAssets("XRI Default Input Actions t:InputActionAsset");
+        if (guids.Length == 0) return;
+        string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+        Object[] subAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+        
+        UnityEngine.InputSystem.InputActionReference uiPressRef = null;
+        foreach (var sub in subAssets)
+        {
+            if (sub is UnityEngine.InputSystem.InputActionReference reference)
+            {
+                if (reference.name == $"{prefix}/UI Press")
+                {
+                    uiPressRef = reference;
+                    break;
+                }
+            }
+        }
+        
+        if (uiPressRef == null)
+        {
+            Debug.LogError($"   ❌ Could not find UI Press action reference for {prefix}!");
+            return;
+        }
+        
+        // Log all properties of XRRayInteractor that might be input actions
+        PropertyInfo[] properties = rayType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var p in properties)
+        {
+            if (p.Name.ToLower().Contains("press") || p.Name.ToLower().Contains("ui"))
+            {
+                Debug.Log($"      [RayInteractor Property] {p.Name} = {p.GetValue(rayInteractor) ?? "null"}");
+            }
+        }
+        
+        // Now set the UI Press Action serialized property to be sure
+        SerializedObject so = new SerializedObject(rayInteractor);
+        
+        // Try various common serialized field names for uiPressAction in XRI 3.x and 2.x
+        string[] uiPressPropNames = { "m_UIPressAction", "m_UiPressAction", "uiPressAction", "m_UIPressInput", "m_UiPressInput" };
+        bool successfullyBound = false;
+        
+        foreach (var propName in uiPressPropNames)
+        {
+            var prop = so.FindProperty(propName);
+            if (prop != null)
+            {
+                var useRefProp = prop.FindPropertyRelative("m_UseReference");
+                var refProp = prop.FindPropertyRelative("m_Reference");
+                
+                if (useRefProp != null && refProp != null)
+                {
+                    useRefProp.boolValue = true;
+                    refProp.objectReferenceValue = uiPressRef;
+                    so.ApplyModifiedProperties();
+                    Debug.Log($"      ✅ Successfully bound '{uiPressRef.name}' to RayInteractor field '{propName}'.");
+                    successfullyBound = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!successfullyBound)
+        {
+            Debug.LogWarning("   ⚠️ Could not find a serialized field to bind UI Press Action on XRRayInteractor. Printing all serialized properties for diagnosis:");
+            SerializedProperty iter = so.GetIterator();
+            if (iter.NextVisible(true))
+            {
+                do
+                {
+                    if (iter.name.ToLower().Contains("press") || iter.name.ToLower().Contains("ui"))
+                    {
+                        Debug.Log($"      [Serialized Field] {iter.name} (Type: {iter.propertyType})");
+                    }
+                } while (iter.NextVisible(false));
+            }
+        }
     }
 
     private static void ApplyInputModulePreset(XRUIInputModule xrui)
