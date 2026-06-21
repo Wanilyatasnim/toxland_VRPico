@@ -30,6 +30,8 @@ public class DesktopLocomotion : MonoBehaviour
     // ── Internal ──────────────────────────────────────────────
     private float _pitch       = 0f;
     private bool  _mouseActive = false;
+    private Behaviour _trackedPoseDriver;
+    private bool _driverWasEnabled = false;
 
     // ── Auto-attach ───────────────────────────────────────────
     /// <summary>
@@ -75,6 +77,14 @@ public class DesktopLocomotion : MonoBehaviour
         {
             float euler = cameraTransform.localEulerAngles.x;
             _pitch = euler > 180f ? euler - 360f : euler;
+
+            // Cache TrackedPoseDriver to disable it during mouse look
+            _trackedPoseDriver = cameraTransform.GetComponent("TrackedPoseDriver") as Behaviour;
+            if (_trackedPoseDriver == null)
+            {
+                // Fallback for newer XRI input system driver
+                _trackedPoseDriver = cameraTransform.GetComponent("UnityEngine.InputSystem.XR.TrackedPoseDriver") as Behaviour;
+            }
         }
     }
 
@@ -93,6 +103,12 @@ public class DesktopLocomotion : MonoBehaviour
             _mouseActive = true;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible   = false;
+
+            if (_trackedPoseDriver != null)
+            {
+                _driverWasEnabled = _trackedPoseDriver.enabled;
+                _trackedPoseDriver.enabled = false;
+            }
         }
 
         // Release on right-click release or Escape
@@ -101,6 +117,11 @@ public class DesktopLocomotion : MonoBehaviour
             _mouseActive     = false;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible   = true;
+
+            if (_trackedPoseDriver != null && _driverWasEnabled)
+            {
+                _trackedPoseDriver.enabled = true;
+            }
         }
     }
 

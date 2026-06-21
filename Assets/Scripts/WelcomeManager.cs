@@ -30,12 +30,12 @@ public class WelcomeManager : MonoBehaviour
         if (_loading) return;
         _loading = true;
 
-        Debug.Log("[WelcomeManager] Starting game → loading: " + gameSceneName);
+        Debug.Log("[WelcomeManager] Starting game — hiding welcome popup.");
 
         if (delaySeconds > 0f)
-            Invoke(nameof(LoadGameScene), delaySeconds);
+            Invoke(nameof(HidePopup), delaySeconds);
         else
-            LoadGameScene();
+            HidePopup();
     }
 
     /// <summary>
@@ -52,8 +52,8 @@ public class WelcomeManager : MonoBehaviour
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    private void LoadGameScene()
+    private void HidePopup()
     {
-        SceneManager.LoadScene(gameSceneName);
+        gameObject.SetActive(false);
     }
 }
