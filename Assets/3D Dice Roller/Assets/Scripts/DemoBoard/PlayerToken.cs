@@ -63,22 +63,22 @@ public class PlayerToken : MonoBehaviour
             if (moveQueue != null && moveQueueIndex < moveQueue.Length)
             {
                 Tile nextTile = moveQueue[moveQueueIndex];
-                SetNewTargetPosition(nextTile.transform.position);
+                if (nextTile != null) SetNewTargetPosition(nextTile.transform.position);
                 moveQueueIndex++;
             }
 
             //for randomly shows the blue video
-            else if (moveQueue != null && moveQueueIndex == moveQueue.Length && finalTile.extraMove > 0)
+            else if (moveQueue != null && moveQueueIndex == moveQueue.Length && finalTile != null && finalTile.extraMove > 0)
             {
-                RollDiceUI.SetActive(false);
+                if (RollDiceUI != null) RollDiceUI.SetActive(false);
                 randomNumber = Random.Range(0, 7);
                 blueVideo[randomNumber].SetActive(true);
                 moveQueue = null;
             }
             //for randomly shows the red video
-            else if (moveQueue != null && moveQueueIndex == moveQueue.Length && finalTile.extraMove < 0)
+            else if (moveQueue != null && moveQueueIndex == moveQueue.Length && finalTile != null && finalTile.extraMove < 0)
             {
-                RollDiceUI.SetActive(false);
+                if (RollDiceUI != null) RollDiceUI.SetActive(false);
                 randomNumber = Random.Range(0, 7);
                 redVideo[randomNumber].SetActive(true);
                 moveQueue = null;

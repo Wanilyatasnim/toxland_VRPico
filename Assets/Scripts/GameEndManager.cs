@@ -77,7 +77,7 @@ public class GameEndManager : MonoBehaviour
         
         if (_scoreText != null) _scoreText.text = $"Jumlah Markah: {score}";
         if (_starsText != null) 
-            _starsText.text = score >= 20 ? "★ ★ ★" : score >= 10 ? "★ ★ ☆" : "★ ☆ ☆";
+            _starsText.text = score >= 20 ? "* * *" : score >= 10 ? "* *  " : "*    ";
 
         // Re-center canvas in front of the player's current view just in case they moved
         var cam = Camera.main;
