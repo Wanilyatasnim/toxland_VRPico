@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.UI;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 public class SceneUIFixer : EditorWindow
 {
@@ -49,13 +50,11 @@ public class SceneUIFixer : EditorWindow
         var canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (var canvas in canvases)
         {
-            Debug.Log($"🔧 Processing Canvas: '{canvas.name}'");
-            
             // Remove missing scripts (Oculus components, etc.)
             int removedCount = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(canvas.gameObject);
             if (removedCount > 0)
             {
-                Debug.Log($"✅ Removed {removedCount} missing script(s) from '{canvas.name}'.");
+                Debug.Log($"✅ Removed {removedCount} missing script(s) from Canvas '{canvas.name}'.");
             }
             
             if (canvas.renderMode == RenderMode.WorldSpace)
@@ -72,19 +71,69 @@ public class SceneUIFixer : EditorWindow
                     }
                     
                     canvas.gameObject.AddComponent<TrackedDeviceGraphicRaycaster>();
-                    Debug.Log($"✅ Added TrackedDeviceGraphicRaycaster to '{canvas.name}'.");
+                    Debug.Log($"✅ Added TrackedDeviceGraphicRaycaster to WorldSpace Canvas '{canvas.name}'.");
                 }
                 
                 // Ensure event camera is assigned to main camera
                 if (canvas.worldCamera == null && Camera.main != null)
                 {
                     canvas.worldCamera = Camera.main;
-                    Debug.Log($"✅ Assigned Main Camera as Event Camera for '{canvas.name}'.");
+                    Debug.Log($"✅ Assigned Main Camera as Event Camera for WorldSpace Canvas '{canvas.name}'.");
                 }
             }
         }
 
-        // 3. Scan & Output XR Origin hierarchy to help diagnose controllers
+        // 3. Fix XR Controllers (Add lasers if they only have ActionBasedController)
+        var controllers = Object.FindObjectsByType<ActionBasedController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        if (controllers.Length == 0)
+        {
+            Debug.LogWarning("⚠️ No ActionBasedController components found in the scene.");
+        }
+        else
+        {
+            foreach (var controller in controllers)
+            {
+                Debug.Log($"🔧 Checking controller: '{controller.name}'");
+                
+                // Let's look for any type of Interactor (checking by name to avoid namespace variations)
+                bool hasInteractor = false;
+                var components = controller.GetComponents<Component>();
+                foreach (var c in components)
+                {
+                    if (c != null && c.GetType().Name.Contains("Interactor"))
+                    {
+                        hasInteractor = true;
+                        break;
+                    }
+                }
+
+                if (!hasInteractor)
+                {
+                    Debug.Log($"🔧 Controller '{controller.name}' has no Interactor. Adding XRRayInteractor components...");
+                    
+                    // Add XRRayInteractor
+                    var rayInteractor = controller.gameObject.AddComponent<XRRayInteractor>();
+                    
+                    // Add LineRenderer
+                    var lineRenderer = controller.gameObject.AddComponent<LineRenderer>();
+                    // Set default settings for LineRenderer so it is thin and visible
+                    lineRenderer.startWidth = 0.01f;
+                    lineRenderer.endWidth = 0.01f;
+                    lineRenderer.useWorldSpace = true;
+                    
+                    // Add XRInteractorLineVisual
+                    var lineVisual = controller.gameObject.AddComponent<XRInteractorLineVisual>();
+                    
+                    Debug.Log($"✅ Added XRRayInteractor, LineRenderer, and XRInteractorLineVisual to '{controller.name}'.");
+                }
+                else
+                {
+                    Debug.Log($"✅ Controller '{controller.name}' already has an Interactor component.");
+                }
+            }
+        }
+
+        // 4. Scan & Output XR Origin hierarchy to help diagnose controllers
         GameObject origin = GameObject.Find("XR Origin (VR)");
         if (origin == null) origin = GameObject.Find("XR Origin");
         if (origin == null) origin = GameObject.Find("XROrigin");
