@@ -404,33 +404,30 @@ public class SceneUIFixer : EditorWindow
         
         SerializedObject so = new SerializedObject(controller);
         
-        if (posRef != null)
-        {
-            so.FindProperty("m_PositionAction.m_UseReference").boolValue = true;
-            so.FindProperty("m_PositionAction.m_Reference").objectReferenceValue = posRef;
-        }
-        if (rotRef != null)
-        {
-            so.FindProperty("m_RotationAction.m_UseReference").boolValue = true;
-            so.FindProperty("m_RotationAction.m_Reference").objectReferenceValue = rotRef;
-        }
-        if (selectRef != null)
-        {
-            so.FindProperty("m_SelectAction.m_UseReference").boolValue = true;
-            so.FindProperty("m_SelectAction.m_Reference").objectReferenceValue = selectRef;
-        }
-        if (uiPressRef != null)
-        {
-            so.FindProperty("m_UiPressAction.m_UseReference").boolValue = true;
-            so.FindProperty("m_UiPressAction.m_Reference").objectReferenceValue = uiPressRef;
-        }
-        if (activateRef != null)
-        {
-            so.FindProperty("m_ActivateAction.m_UseReference").boolValue = true;
-            so.FindProperty("m_ActivateAction.m_Reference").objectReferenceValue = activateRef;
-        }
+        BindSerializedActionProperty(so, "m_PositionAction", posRef);
+        BindSerializedActionProperty(so, "m_RotationAction", rotRef);
+        BindSerializedActionProperty(so, "m_SelectAction", selectRef);
+        BindSerializedActionProperty(so, "m_UIPressAction", uiPressRef);
+        BindSerializedActionProperty(so, "m_UiPressAction", uiPressRef);
+        BindSerializedActionProperty(so, "m_ActivateAction", activateRef);
         
         so.ApplyModifiedProperties();
+    }
+
+    private static void BindSerializedActionProperty(SerializedObject so, string propName, UnityEngine.InputSystem.InputActionReference reference)
+    {
+        if (reference == null) return;
+        var prop = so.FindProperty(propName);
+        if (prop != null)
+        {
+            var useRef = prop.FindPropertyRelative("m_UseReference");
+            var refVal = prop.FindPropertyRelative("m_Reference");
+            if (useRef != null && refVal != null)
+            {
+                useRef.boolValue = true;
+                refVal.objectReferenceValue = reference;
+            }
+        }
     }
 
     private static void PrintControllerActions(ActionBasedController controller)
