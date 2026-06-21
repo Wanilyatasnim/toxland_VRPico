@@ -73,65 +73,37 @@ public static class GameEndPopupCreator
         Color lightYellow = new Color(0.99f, 0.95f, 0.82f);
         var innerPanelGo = MakeImage(canvasGo, "InnerBG", Vector2.zero, new Vector2(-24f, -24f), Vector2.zero, Vector2.one, lightYellow, roundedSprite, Image.Type.Sliced);
 
-        // ── 5c. Official Toxland Title Image (Header) ──
-        var titleSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TITLE_IMG_PATH);
-        if (titleSprite == null)
-        {
-            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(TITLE_IMG_PATH);
-            if (tex != null) titleSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-        }
-
-        var logoGo = new GameObject("LogoImage");
-        logoGo.transform.SetParent(innerPanelGo.transform, false);
-        var logoRt = logoGo.AddComponent<RectTransform>();
-        logoRt.anchorMin = new Vector2(0.5f, 1f);
-        logoRt.anchorMax = new Vector2(0.5f, 1f);
-        logoRt.pivot = new Vector2(0.5f, 1f);
-        logoRt.anchoredPosition = new Vector2(0f, -20f);
-        
-        float aspect = titleSprite != null ? (float)titleSprite.texture.width / titleSprite.texture.height : 1.6f;
-        float logoWidth = 650f;
-        float logoHeight = logoWidth / aspect;
-        logoRt.sizeDelta = new Vector2(logoWidth, logoHeight);
-
-        var logoImg = logoGo.AddComponent<Image>();
-        if (titleSprite != null)
-        {
-            logoImg.sprite = titleSprite;
-            logoImg.preserveAspect = true;
-        }
-
-        // ── 5d. Congrats text ──
+        // ── 5c. Header text ──
         Color pinkText = new Color(0.96f, 0.2f, 0.5f);
         Color brownText = new Color(0.45f, 0.30f, 0.15f);
         
-        float textY = -20f - logoHeight - 10f; // Position right below logo
-        AddTMPText(innerPanelGo, "Header", new Vector2(0f, textY), new Vector2(700f, 60f), 
-            "TAMAT!", 50f, FontStyles.Bold, pinkText, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+        AddTMPText(innerPanelGo, "Header", new Vector2(0f, -80f), new Vector2(700f, 80f), 
+            "TAMAT!", 70f, FontStyles.Bold, pinkText, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
 
-        AddTMPText(innerPanelGo, "CongratsText", new Vector2(0f, textY - 60f), new Vector2(700f, 50f), 
+        // ── 5d. Congrats text ──
+        AddTMPText(innerPanelGo, "CongratsText", new Vector2(0f, -180f), new Vector2(700f, 60f), 
             "Tahniah! Anda telah mencapai petak akhir!", 
-            30f, FontStyles.Bold, brownText, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            36f, FontStyles.Bold, brownText, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
 
         // ── 5e. Score display ──
-        var scoreGo = AddTMPText(innerPanelGo, "ScoreText", new Vector2(0f, 60f), new Vector2(700f, 80f), 
+        var scoreGo = AddTMPText(innerPanelGo, "ScoreText", new Vector2(0f, -320f), new Vector2(700f, 80f), 
             "Jumlah Markah: 0", 
-            42f, FontStyles.Bold, pinkText, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            50f, FontStyles.Bold, pinkText, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
 
         // ── 5f. Stars display ──
         Color starColor = new Color(1.0f, 0.6f, 0.1f);
-        var starsGo = AddTMPText(innerPanelGo, "StarsText", new Vector2(0f, -10f), new Vector2(700f, 60f), 
+        var starsGo = AddTMPText(innerPanelGo, "StarsText", new Vector2(0f, -420f), new Vector2(700f, 60f), 
             "* * *", 
-            60f, FontStyles.Bold, starColor, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            80f, FontStyles.Bold, starColor, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
 
         // ── 5g. Buttons (Replay & Quit) ──
         Color greenBtn = new Color(0.48f, 0.75f, 0.26f);
         Color redBtn   = new Color(0.90f, 0.30f, 0.30f);
 
-        var replayBtnGo = CreateStyledButton(innerPanelGo, "BtnReplay", new Vector2(-180f, 40f), new Vector2(300f, 80f), 
+        var replayBtnGo = CreateStyledButton(innerPanelGo, "BtnReplay", new Vector2(-180f, 60f), new Vector2(300f, 80f), 
             "Main Semula", greenBtn, Color.white, 28f, roundedSprite);
 
-        var quitBtnGo = CreateStyledButton(innerPanelGo, "BtnQuit", new Vector2(180f, 40f), new Vector2(300f, 80f), 
+        var quitBtnGo = CreateStyledButton(innerPanelGo, "BtnQuit", new Vector2(180f, 60f), new Vector2(300f, 80f), 
             "Keluar", redBtn, Color.white, 28f, roundedSprite);
 
         // Hide by default
