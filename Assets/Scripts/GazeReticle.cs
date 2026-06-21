@@ -123,13 +123,11 @@ public class GazeReticle : MonoBehaviour
 
         // 2. Fallback: world-space ray from camera centre
         Ray ray = _cam.ScreenPointToRay(centre);
-        var raycasters = FindObjectsByType<GraphicRaycaster>(
-            FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude);
 
-        foreach (var rc in raycasters)
+        foreach (var canvas in canvases)
         {
-            var canvas = rc.GetComponent<Canvas>();
-            if (canvas == null || canvas.renderMode != RenderMode.WorldSpace) continue;
+            if (canvas.renderMode != RenderMode.WorldSpace) continue;
 
             foreach (var graphic in canvas.GetComponentsInChildren<Graphic>())
             {

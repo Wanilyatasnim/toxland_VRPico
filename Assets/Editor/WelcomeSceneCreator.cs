@@ -8,62 +8,120 @@ using TMPro;
 using System.Linq;
 
 /// <summary>
-/// WelcomeSceneCreator — Editor tool that programmatically builds the
-/// "WelcomeScene" for Toxland VR: Hop & Help.
+/// WelcomeSceneCreator — Editor tool that builds WelcomeScene for Toxland VR.
+/// Theme: bright sky blue + rainbow border + hot-pink title — matches the
+/// game's existing art style (see TAMAT.jpg / AB06.jpg).
 ///
 /// Run via:  Tools → Toxland → Setup Welcome Scene
 ///
 /// What it does:
-///   1. Creates Assets/Scenes/WelcomeScene.unity with all UI components wired
-///   2. Adds WelcomeScene (index 0) + MainScene (index 1) to Build Settings
-///   3. Saves and reimports everything
+///   1. Creates Assets/Scenes/WelcomeScene.unity
+///   2. Instantiates the XR Origin (XR Rig) prefab so controllers are visible
+///   3. Builds a world-space canvas in Toxland colour scheme
+///   4. Wires WelcomeManager Start/Quit buttons
+///   5. Adds WelcomeScene [0] + MainScene [1] to Build Settings
 /// </summary>
 public static class WelcomeSceneCreator
 {
     private const string WELCOME_SCENE_PATH = "Assets/Scenes/WelcomeScene.unity";
     private const string MAIN_SCENE_PATH    = "Assets/Scenes/MainScene.unity";
+    private const string XR_ORIGIN_PREFAB   =
+        "Assets/Samples/XR Interaction Toolkit/3.0.4/Starter Assets/Prefabs/XR Origin (XR Rig).prefab";
+
+    // ── Toxland colour palette ────────────────────────────────────────────────
+    // Derived from TAMAT.jpg / AB06.jpg art assets
+    private static readonly Color SkyBlue      = new Color(0.20f, 0.75f, 1.00f); // background
+    private static readonly Color HotPink      = new Color(0.93f, 0.11f, 0.52f); // title bar & main btn
+    private static readonly Color BrightYellow = new Color(1.00f, 0.87f, 0.00f); // stars / accents
+    private static readonly Color PanelBlue    = new Color(0.30f, 0.82f, 1.00f); // inner panel
+    private static readonly Color White        = Color.white;
+    private static readonly Color DarkText     = new Color(0.10f, 0.05f, 0.20f); // dark purple-black
+
+    // Rainbow stripe colours (top/bottom bars, 7 colours)
+    private static readonly Color[] Rainbow = {
+        new Color(0.94f, 0.17f, 0.17f), // red
+        new Color(1.00f, 0.55f, 0.00f), // orange
+        new Color(1.00f, 0.87f, 0.00f), // yellow
+        new Color(0.13f, 0.78f, 0.22f), // green
+        new Color(0.10f, 0.55f, 0.95f), // blue
+        new Color(0.50f, 0.10f, 0.85f), // purple
+        new Color(0.93f, 0.11f, 0.52f), // hot pink
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     [MenuItem("Tools/Toxland/Setup Welcome Scene", priority = 1)]
     public static void SetupWelcomeScene()
     {
-        // ── Ask confirmation ──────────────────────────────────────────────────
         bool proceed = EditorUtility.DisplayDialog(
             "Setup Welcome Scene",
             "This will create 'Assets/Scenes/WelcomeScene.unity' and update Build Settings.\n\nContinue?",
             "Yes, create it!", "Cancel");
-
         if (!proceed) return;
 
-        // ── Save current scene first ──────────────────────────────────────────
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
-        // ── Create a new empty scene ──────────────────────────────────────────
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         // ── 1. Directional Light ──────────────────────────────────────────────
-        var light = new GameObject("Directional Light");
-        light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-        var lightComp = light.AddComponent<Light>();
-        lightComp.type  = LightType.Directional;
-        lightComp.color = new Color(1f, 0.95f, 0.85f);
-        lightComp.intensity = 1.2f;
+        var lightGo = new GameObject("Directional Light");
+        lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+        var lc = lightGo.AddComponent<Light>();
+        lc.type      = LightType.Directional;
+        lc.color     = new Color(1f, 0.97f, 0.92f);
+        lc.intensity = 1.1f;
 
-        // ── 2. Main Camera ────────────────────────────────────────────────────
-        var camGo = new GameObject("Main Camera");
-        camGo.tag = "MainCamera";
-        var cam = camGo.AddComponent<Camera>();
-        cam.backgroundColor = new Color(0.05f, 0.08f, 0.15f);
-        cam.clearFlags      = CameraClearFlags.SolidColor;
-        cam.fieldOfView     = 90f;
-        camGo.AddComponent<AudioListener>();
-        camGo.transform.position = new Vector3(0f, 1.6f, 0f); // eye height
+        // ── 2. XR Origin (XR Rig) — gives controllers + simulator support ─────
+        Camera xrCamera    = null;
+        GameObject xrOriginGo = null;
+
+        var xrPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(XR_ORIGIN_PREFAB);
+        if (xrPrefab != null)
+        {
+            xrOriginGo = (GameObject)PrefabUtility.InstantiatePrefab(xrPrefab);
+            xrOriginGo.name = "XR Origin (VR)";
+            xrOriginGo.transform.position = Vector3.zero;
+            xrCamera = xrOriginGo.GetComponentInChildren<Camera>();
+            if (xrCamera != null)
+            {
+                xrCamera.backgroundColor = SkyBlue;
+                xrCamera.clearFlags      = CameraClearFlags.SolidColor;
+                xrCamera.fieldOfView     = 90f;
+            }
+            Debug.Log("[WelcomeSceneCreator] XR Origin (XR Rig) instantiated from prefab.");
+        }
+        else
+        {
+            // Fallback: plain camera if prefab not found
+            Debug.LogWarning($"[WelcomeSceneCreator] XR Origin prefab not found at '{XR_ORIGIN_PREFAB}'. Using plain camera.");
+            var camGo = new GameObject("Main Camera");
+            camGo.tag = "MainCamera";
+            xrCamera  = camGo.AddComponent<Camera>();
+            xrCamera.backgroundColor = SkyBlue;
+            xrCamera.clearFlags      = CameraClearFlags.SolidColor;
+            xrCamera.fieldOfView     = 90f;
+            camGo.AddComponent<AudioListener>();
+            camGo.transform.position = new Vector3(0f, 1.6f, 0f);
+        }
 
         // ── 3. EventSystem + XRUIInputModule ─────────────────────────────────
-        var esGo = new GameObject("EventSystem");
-        esGo.AddComponent<EventSystem>();
-        var xrui = esGo.AddComponent<XRUIInputModule>();
+        // Check if the XR Origin already contains an EventSystem
+        var existingES = Object.FindFirstObjectByType<EventSystem>();
+        GameObject esGo;
+        XRUIInputModule xrui;
+        if (existingES == null)
+        {
+            esGo = new GameObject("EventSystem");
+            esGo.AddComponent<EventSystem>();
+            xrui = esGo.AddComponent<XRUIInputModule>();
+        }
+        else
+        {
+            esGo = existingES.gameObject;
+            xrui = esGo.GetComponent<XRUIInputModule>() ?? esGo.AddComponent<XRUIInputModule>();
+        }
 
-        // Apply the XRI Default XR UI Input Module preset if it exists
+        // Apply the XRI preset
         string[] presetGuids = AssetDatabase.FindAssets("XRI Default XR UI Input Module t:Preset");
         if (presetGuids.Length > 0)
         {
@@ -76,251 +134,328 @@ public static class WelcomeSceneCreator
             }
         }
 
-        // ── 4. World-Space Canvas ─────────────────────────────────────────────
+        // ── 4. World-Space Canvas — Toxland theme ─────────────────────────────
         var canvasGo = new GameObject("WelcomeCanvas");
         var canvas   = canvasGo.AddComponent<Canvas>();
         canvas.renderMode  = RenderMode.WorldSpace;
-        canvas.worldCamera = cam;
+        canvas.worldCamera = xrCamera;
 
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.dynamicPixelsPerUnit = 10f;
 
-        // TrackedDeviceGraphicRaycaster for XR ray interaction.
-        // NOTE: TrackedDeviceGraphicRaycaster inherits GraphicRaycaster, so we only need one.
-        // DesktopMouseClicker uses FindObjectsByType<GraphicRaycaster> which finds this too.
+        // TrackedDeviceGraphicRaycaster — works with XR ray interactors
+        // (inherits BaseRaycaster; DesktopMouseClicker now searches Canvas directly)
         canvasGo.AddComponent<TrackedDeviceGraphicRaycaster>();
 
-        // Position: 2m in front of camera, slightly above eye level
-        canvasGo.transform.position   = new Vector3(0f, 1.7f, 2.5f);
+        // Position 2.5 m in front of XR Origin camera
+        Vector3 camPos = xrCamera != null ? xrCamera.transform.position : new Vector3(0, 1.6f, 0);
+        canvasGo.transform.position   = camPos + new Vector3(0f, 0f, 2.5f);
         canvasGo.transform.rotation   = Quaternion.identity;
         canvasGo.transform.localScale = new Vector3(0.006f, 0.006f, 0.006f);
 
         var canvasRect = canvasGo.GetComponent<RectTransform>();
         canvasRect.sizeDelta = new Vector2(900f, 600f);
 
-        // ── 4a. Background Panel ──────────────────────────────────────────────
-        var bgGo = new GameObject("Background");
-        bgGo.transform.SetParent(canvasGo.transform, false);
-        var bgRect = bgGo.AddComponent<RectTransform>();
-        bgRect.anchorMin    = Vector2.zero;
-        bgRect.anchorMax    = Vector2.one;
-        bgRect.sizeDelta    = Vector2.zero;
-        bgRect.anchoredPosition = Vector2.zero;
-        var bgImg = bgGo.AddComponent<Image>();
-        bgImg.color = new Color(0.05f, 0.08f, 0.18f, 1f);
+        // ── 4a. Sky-blue background ───────────────────────────────────────────
+        MakeImage(canvasGo, "BG",
+                  Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one,
+                  SkyBlue);
 
-        // ── 4b. Top accent strip ──────────────────────────────────────────────
-        var stripGo   = new GameObject("TopAccent");
-        stripGo.transform.SetParent(canvasGo.transform, false);
-        var stripRect = stripGo.AddComponent<RectTransform>();
-        stripRect.anchorMin = new Vector2(0f, 1f);
-        stripRect.anchorMax = new Vector2(1f, 1f);
-        stripRect.pivot     = new Vector2(0.5f, 1f);
-        stripRect.sizeDelta = new Vector2(0f, 12f);
-        stripRect.anchoredPosition = Vector2.zero;
-        var stripImg = stripGo.AddComponent<Image>();
-        stripImg.color = new Color(1f, 0.75f, 0.1f);
+        // ── 4b. Top rainbow bar ───────────────────────────────────────────────
+        BuildRainbowBar(canvasGo, "TopRainbow",
+                        anchorMin: new Vector2(0f, 1f), anchorMax: new Vector2(1f, 1f),
+                        pivot: new Vector2(0.5f, 1f), height: 28f, yOffset: 0f);
 
-        // ── 4c. Game Title (large) ────────────────────────────────────────────
+        // ── 4c. Bottom rainbow bar ────────────────────────────────────────────
+        BuildRainbowBar(canvasGo, "BotRainbow",
+                        anchorMin: new Vector2(0f, 0f), anchorMax: new Vector2(1f, 0f),
+                        pivot: new Vector2(0.5f, 0f), height: 28f, yOffset: 0f);
+
+        // ── 4d. Hot-pink title bar ────────────────────────────────────────────
+        var titleBarGo = MakeImage(canvasGo, "TitleBar",
+            new Vector2(0, -28), new Vector2(0, 90),
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            HotPink, isPivot: true, pivot: new Vector2(0.5f, 1f));
+
+        // White border under title bar
+        MakeImage(canvasGo, "TitleBarBorder",
+            new Vector2(0, -118), new Vector2(0, 8),
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            White, isPivot: true, pivot: new Vector2(0.5f, 1f));
+
+        // ── 4e. Title text — "TOXLAND VR" ─────────────────────────────────────
         var titleGo   = new GameObject("TitleText");
         titleGo.transform.SetParent(canvasGo.transform, false);
         var titleRect = titleGo.AddComponent<RectTransform>();
-        titleRect.anchoredPosition = new Vector2(0f, 140f);
-        titleRect.sizeDelta = new Vector2(860f, 120f);
+        titleRect.anchorMin         = new Vector2(0.5f, 1f);
+        titleRect.anchorMax         = new Vector2(0.5f, 1f);
+        titleRect.pivot             = new Vector2(0.5f, 1f);
+        titleRect.anchoredPosition  = new Vector2(0f, -32f);
+        titleRect.sizeDelta         = new Vector2(860f, 82f);
         var titleTmp = titleGo.AddComponent<TextMeshProUGUI>();
         titleTmp.text      = "TOXLAND VR";
-        titleTmp.fontSize  = 88f;
+        titleTmp.fontSize  = 72f;
         titleTmp.fontStyle = FontStyles.Bold;
         titleTmp.alignment = TextAlignmentOptions.Center;
-        titleTmp.color     = new Color(1f, 0.82f, 0.1f); // gold
+        titleTmp.color     = White;
 
-        // ── 4d. Subtitle ──────────────────────────────────────────────────────
-        var subGo   = new GameObject("SubtitleText");
-        subGo.transform.SetParent(canvasGo.transform, false);
-        var subRect = subGo.AddComponent<RectTransform>();
-        subRect.anchoredPosition = new Vector2(0f, 68f);
-        subRect.sizeDelta = new Vector2(860f, 60f);
-        var subTmp = subGo.AddComponent<TextMeshProUGUI>();
-        subTmp.text      = "Hop & Help — Permainan Ular & Tangga VR";
-        subTmp.fontSize  = 30f;
-        subTmp.alignment = TextAlignmentOptions.Center;
-        subTmp.color     = new Color(0.75f, 0.88f, 1f);
+        // ── 4f. "Hop & Help" subtitle ─────────────────────────────────────────
+        AddTMPText(canvasGo, "SubtitleText",
+                   new Vector2(0f, -140f), new Vector2(840f, 48f),
+                   "Hop & Help  —  Permainan Ular & Tangga VR",
+                   36f, FontStyles.Bold, BrightYellow);
 
-        // ── 4e. Decorative divider ────────────────────────────────────────────
-        var divGo   = new GameObject("Divider");
-        divGo.transform.SetParent(canvasGo.transform, false);
-        var divRect = divGo.AddComponent<RectTransform>();
-        divRect.anchoredPosition = new Vector2(0f, 20f);
-        divRect.sizeDelta = new Vector2(500f, 3f);
-        var divImg = divGo.AddComponent<Image>();
-        divImg.color = new Color(1f, 0.75f, 0.1f, 0.6f);
+        // ── 4g. Inner panel (light blue card) ────────────────────────────────
+        MakeImageRect(canvasGo, "InnerPanel",
+                      new Vector2(0f, -30f), new Vector2(820f, 280f),
+                      PanelBlue, anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f),
+                      pivot: new Vector2(0.5f, 0.5f));
 
-        // ── 4f. Instruction text ──────────────────────────────────────────────
-        var instrGo   = new GameObject("InstructionText");
-        instrGo.transform.SetParent(canvasGo.transform, false);
-        var instrRect = instrGo.AddComponent<RectTransform>();
-        instrRect.anchoredPosition = new Vector2(0f, -50f);
-        instrRect.sizeDelta = new Vector2(800f, 80f);
-        var instrTmp = instrGo.AddComponent<TextMeshProUGUI>();
-        instrTmp.text      = "Belajar keselamatan rumah melalui permainan!\nPilih jawapan yang betul untuk markah lebih tinggi.";
-        instrTmp.fontSize  = 22f;
-        instrTmp.alignment = TextAlignmentOptions.Center;
-        instrTmp.color     = new Color(0.8f, 0.88f, 1f, 0.9f);
+        // Inner panel white border
+        MakeImageRect(canvasGo, "InnerPanelBorder",
+                      new Vector2(0f, -30f), new Vector2(836f, 296f),
+                      White, anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f),
+                      pivot: new Vector2(0.5f, 0.5f));
+        // Push border behind panel (siblings order — border created first = behind)
+        var border = canvasGo.transform.Find("InnerPanelBorder");
+        if (border != null) border.SetSiblingIndex(canvasGo.transform.Find("InnerPanel").GetSiblingIndex());
 
-        // ── 4g. START GAME Button ─────────────────────────────────────────────
-        var startBtnGo   = CreateStyledButton(canvasGo, "BtnStartGame",
-                                              new Vector2(0f, -160f), new Vector2(340f, 75f),
-                                              "▶  MULAKAN PERMAINAN",
-                                              new Color(0.15f, 0.55f, 0.95f));
+        // ── 4h. Instruction text ──────────────────────────────────────────────
+        AddTMPText(canvasGo, "InstructionText",
+                   new Vector2(0f, -10f), new Vector2(780f, 100f),
+                   "Belajar keselamatan rumah melalui permainan!\nJawab soalan dengan betul untuk markah lebih tinggi.",
+                   26f, FontStyles.Normal, DarkText,
+                   anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f));
 
-        // ── 4h. QUIT Button ───────────────────────────────────────────────────
-        var quitBtnGo    = CreateStyledButton(canvasGo, "BtnQuit",
-                                              new Vector2(0f, -255f), new Vector2(200f, 52f),
-                                              "✕  Keluar",
-                                              new Color(0.55f, 0.1f, 0.1f));
+        // Stars decoration
+        AddTMPText(canvasGo, "StarsText",
+                   new Vector2(0f, -90f), new Vector2(600f, 52f),
+                   "★  ★  ★  ★  ★",
+                   32f, FontStyles.Normal, BrightYellow,
+                   anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f));
 
-        // ── 5. WelcomeManager on canvas ───────────────────────────────────────
+        // ── 4i. MULAKAN PERMAINAN button (big pink) ───────────────────────────
+        var startBtnGo = CreateStyledButton(canvasGo, "BtnStartGame",
+                                            new Vector2(0f, -200f), new Vector2(480f, 78f),
+                                            "▶   MULAKAN PERMAINAN",
+                                            HotPink, White, 32f);
+
+        // ── 4j. KELUAR button (smaller, yellow) ───────────────────────────────
+        var quitBtnGo  = CreateStyledButton(canvasGo, "BtnQuit",
+                                            new Vector2(0f, -290f), new Vector2(220f, 52f),
+                                            "✕  Keluar",
+                                            new Color(0.85f, 0.20f, 0.20f), White, 24f);
+
+        // ── 5. WelcomeManager ─────────────────────────────────────────────────
         var wm = canvasGo.AddComponent<WelcomeManager>();
         wm.gameSceneName = "MainScene";
         wm.delaySeconds  = 0.3f;
 
         // Wire buttons → WelcomeManager
-        var startBtn = startBtnGo.GetComponent<Button>();
-        if (startBtn != null)
-        {
-            startBtn.onClick.RemoveAllListeners();
-            UnityEditor.Events.UnityEventTools.AddPersistentListener(
-                startBtn.onClick,
-                wm.StartGame);
-        }
+        WireButton(startBtnGo, wm.StartGame);
+        WireButton(quitBtnGo,  wm.QuitGame);
 
-        var quitBtn = quitBtnGo.GetComponent<Button>();
-        if (quitBtn != null)
-        {
-            quitBtn.onClick.RemoveAllListeners();
-            UnityEditor.Events.UnityEventTools.AddPersistentListener(
-                quitBtn.onClick,
-                wm.QuitGame);
-        }
+        // ── 6. Version label (bottom) ─────────────────────────────────────────
+        AddTMPText(canvasGo, "VersionLabel",
+                   new Vector2(0f, 38f), new Vector2(0f, 30f),
+                   "Toxland VR v1.0   |   PICO 4   |   Unity 6",
+                   15f, FontStyles.Normal, new Color(0.05f, 0.3f, 0.5f, 0.9f),
+                   anchorMin: new Vector2(0f, 0f), anchorMax: new Vector2(1f, 0f),
+                   pivot: new Vector2(0.5f, 0f));
 
-        // ── 6. Version label ──────────────────────────────────────────────────
-        var verGo   = new GameObject("VersionLabel");
-        verGo.transform.SetParent(canvasGo.transform, false);
-        var verRect = verGo.AddComponent<RectTransform>();
-        verRect.anchorMin = new Vector2(0f, 0f);
-        verRect.anchorMax = new Vector2(1f, 0f);
-        verRect.pivot     = new Vector2(0.5f, 0f);
-        verRect.anchoredPosition = new Vector2(0f, 14f);
-        verRect.sizeDelta = new Vector2(0f, 36f);
-        var verTmp = verGo.AddComponent<TextMeshProUGUI>();
-        verTmp.text      = "Toxland VR v1.0   |   PICO 4   |   Unity 6";
-        verTmp.fontSize  = 16f;
-        verTmp.alignment = TextAlignmentOptions.Center;
-        verTmp.color     = new Color(0.5f, 0.55f, 0.65f, 0.7f);
-
-        // ── 7. Save the scene ─────────────────────────────────────────────────
+        // ── 7. Save scene ─────────────────────────────────────────────────────
         bool saved = EditorSceneManager.SaveScene(scene, WELCOME_SCENE_PATH);
         if (!saved)
         {
             EditorUtility.DisplayDialog("Error", "Failed to save WelcomeScene.unity!", "OK");
             return;
         }
-
         AssetDatabase.Refresh();
         Debug.Log($"[WelcomeSceneCreator] WelcomeScene saved at '{WELCOME_SCENE_PATH}'.");
 
-        // ── 8. Update Build Settings ──────────────────────────────────────────
+        // ── 8. Build Settings ─────────────────────────────────────────────────
         UpdateBuildSettings();
 
         EditorUtility.DisplayDialog(
             "✅ Done!",
-            "WelcomeScene created and added to Build Settings.\n\n" +
+            "WelcomeScene created with Toxland theme and added to Build Settings.\n\n" +
             "Build order:\n  [0] WelcomeScene\n  [1] MainScene\n\n" +
-            "Press Play from WelcomeScene to test the full flow!",
-            "Great!");
+            "Open WelcomeScene and press Play to test!",
+            "Awesome!");
     }
 
     // ── Build Settings ────────────────────────────────────────────────────────
     private static void UpdateBuildSettings()
     {
-        var existingScenes = EditorBuildSettings.scenes.ToList();
+        var existing = EditorBuildSettings.scenes.ToList();
+        bool hasWelcome = existing.Any(s => s.path == WELCOME_SCENE_PATH);
+        bool hasMain    = existing.Any(s => s.path == MAIN_SCENE_PATH);
 
-        // Check if already added
-        bool hasWelcome = existingScenes.Any(s => s.path == WELCOME_SCENE_PATH);
-        bool hasMain    = existingScenes.Any(s => s.path == MAIN_SCENE_PATH);
+        var next = new System.Collections.Generic.List<EditorBuildSettingsScene>();
 
-        var newScenes = new System.Collections.Generic.List<EditorBuildSettingsScene>();
+        if (!hasWelcome) next.Add(new EditorBuildSettingsScene(WELCOME_SCENE_PATH, true));
+        else             { var w = existing.First(s => s.path == WELCOME_SCENE_PATH); w.enabled = true; next.Add(w); existing.RemoveAll(s => s.path == WELCOME_SCENE_PATH); }
 
-        // WelcomeScene always at index 0
-        if (!hasWelcome)
-            newScenes.Add(new EditorBuildSettingsScene(WELCOME_SCENE_PATH, true));
-        else
-        {
-            var ws = existingScenes.First(s => s.path == WELCOME_SCENE_PATH);
-            ws.enabled = true;
-            newScenes.Add(ws);
-            existingScenes.RemoveAll(s => s.path == WELCOME_SCENE_PATH);
-        }
+        if (!hasMain)    next.Add(new EditorBuildSettingsScene(MAIN_SCENE_PATH, true));
+        else             { var m = existing.First(s => s.path == MAIN_SCENE_PATH);    m.enabled = true; next.Add(m); existing.RemoveAll(s => s.path == MAIN_SCENE_PATH); }
 
-        // MainScene always at index 1
-        if (!hasMain)
-            newScenes.Add(new EditorBuildSettingsScene(MAIN_SCENE_PATH, true));
-        else
-        {
-            var ms = existingScenes.First(s => s.path == MAIN_SCENE_PATH);
-            ms.enabled = true;
-            newScenes.Add(ms);
-            existingScenes.RemoveAll(s => s.path == MAIN_SCENE_PATH);
-        }
-
-        // Add any remaining scenes (Photon demos etc.) after
-        foreach (var s in existingScenes)
-            newScenes.Add(s);
-
-        EditorBuildSettings.scenes = newScenes.ToArray();
+        foreach (var s in existing) next.Add(s);
+        EditorBuildSettings.scenes = next.ToArray();
         Debug.Log("[WelcomeSceneCreator] Build Settings updated: WelcomeScene[0], MainScene[1].");
     }
 
-    // ── Button factory helper ─────────────────────────────────────────────────
-    private static GameObject CreateStyledButton(GameObject parent, string name,
-                                                  Vector2 anchoredPos, Vector2 size,
-                                                  string label, Color bgColor)
-    {
-        var btnGo   = new GameObject(name);
-        btnGo.transform.SetParent(parent.transform, false);
-        var btnRect = btnGo.AddComponent<RectTransform>();
-        btnRect.anchoredPosition = anchoredPos;
-        btnRect.sizeDelta = size;
+    // ── UI Helpers ────────────────────────────────────────────────────────────
 
-        var btnImg = btnGo.AddComponent<Image>();
-        btnImg.color = bgColor;
+    /// <summary>Creates a full-canvas-stretch or anchor-based Image.</summary>
+    private static GameObject MakeImage(GameObject parent, string name,
+                                         Vector2 anchoredPos, Vector2 sizeDelta,
+                                         Vector2 anchorMin, Vector2 anchorMax,
+                                         Color color,
+                                         bool isPivot = false, Vector2 pivot = default)
+    {
+        var go   = new GameObject(name);
+        go.transform.SetParent(parent.transform, false);
+        var rt   = go.AddComponent<RectTransform>();
+        rt.anchorMin        = anchorMin;
+        rt.anchorMax        = anchorMax;
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta        = sizeDelta;
+        if (isPivot) rt.pivot = pivot;
+        go.AddComponent<Image>().color = color;
+        return go;
+    }
+
+    /// <summary>Creates an Image with centre-anchor positioning.</summary>
+    private static GameObject MakeImageRect(GameObject parent, string name,
+                                             Vector2 anchoredPos, Vector2 size, Color color,
+                                             Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent.transform, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin        = anchorMin;
+        rt.anchorMax        = anchorMax;
+        rt.pivot            = pivot;
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta        = size;
+        go.AddComponent<Image>().color = color;
+        return go;
+    }
+
+    /// <summary>Builds a horizontal row of rainbow colour strips.</summary>
+    private static void BuildRainbowBar(GameObject parent, string name,
+                                         Vector2 anchorMin, Vector2 anchorMax,
+                                         Vector2 pivot, float height, float yOffset)
+    {
+        var barGo = new GameObject(name);
+        barGo.transform.SetParent(parent.transform, false);
+        var barRt = barGo.AddComponent<RectTransform>();
+        barRt.anchorMin        = anchorMin;
+        barRt.anchorMax        = anchorMax;
+        barRt.pivot            = pivot;
+        barRt.anchoredPosition = new Vector2(0, yOffset);
+        barRt.sizeDelta        = new Vector2(0, height);
+
+        // Transparent image as container (needed for RectTransform)
+        var barImg = barGo.AddComponent<Image>();
+        barImg.color = Color.clear;
+
+        int count      = Rainbow.Length;
+        float stripW   = 900f / count; // canvas is 900 units wide
+
+        for (int i = 0; i < count; i++)
+        {
+            var strip = new GameObject($"Strip{i}");
+            strip.transform.SetParent(barGo.transform, false);
+            var srt = strip.AddComponent<RectTransform>();
+            srt.anchorMin        = new Vector2(0f, 0f);
+            srt.anchorMax        = new Vector2(0f, 1f);
+            srt.pivot            = new Vector2(0f, 0f);
+            srt.anchoredPosition = new Vector2(i * stripW - 450f, 0f); // offset from centre
+            srt.sizeDelta        = new Vector2(stripW + 1f, 0f); // +1 to avoid gaps
+            strip.AddComponent<Image>().color = Rainbow[i];
+        }
+    }
+
+    /// <summary>Adds a TextMeshProUGUI child.</summary>
+    private static void AddTMPText(GameObject parent, string name,
+                                    Vector2 anchoredPos, Vector2 sizeDelta,
+                                    string text, float fontSize, FontStyles style, Color color,
+                                    Vector2 anchorMin = default, Vector2 anchorMax = default,
+                                    Vector2 pivot = default,
+                                    TextAlignmentOptions alignment = TextAlignmentOptions.Center)
+    {
+        bool centreAnchored = (anchorMin == default && anchorMax == default);
+        var go = new GameObject(name);
+        go.transform.SetParent(parent.transform, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin        = centreAnchored ? new Vector2(0.5f, 1f) : anchorMin;
+        rt.anchorMax        = centreAnchored ? new Vector2(0.5f, 1f) : anchorMax;
+        rt.pivot            = (pivot == default) ? new Vector2(0.5f, 0.5f) : pivot;
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta        = sizeDelta;
+        var tmp = go.AddComponent<TextMeshProUGUI>();
+        tmp.text      = text;
+        tmp.fontSize  = fontSize;
+        tmp.fontStyle = style;
+        tmp.alignment = alignment;
+        tmp.color     = color;
+    }
+
+    /// <summary>Creates a styled button GameObject with label.</summary>
+    private static GameObject CreateStyledButton(GameObject parent, string name,
+                                                   Vector2 anchoredPos, Vector2 size,
+                                                   string label, Color bgColor,
+                                                   Color textColor, float fontSize)
+    {
+        var btnGo = new GameObject(name);
+        btnGo.transform.SetParent(parent.transform, false);
+        var btnRt = btnGo.AddComponent<RectTransform>();
+        btnRt.anchorMin        = new Vector2(0.5f, 1f);
+        btnRt.anchorMax        = new Vector2(0.5f, 1f);
+        btnRt.pivot            = new Vector2(0.5f, 1f);
+        btnRt.anchoredPosition = anchoredPos;
+        btnRt.sizeDelta        = size;
+
+        var img = btnGo.AddComponent<Image>();
+        img.color = bgColor;
 
         var btn = btnGo.AddComponent<Button>();
         var cb  = btn.colors;
         cb.normalColor      = bgColor;
-        cb.highlightedColor = Color.Lerp(bgColor, Color.white, 0.25f);
-        cb.pressedColor     = Color.Lerp(bgColor, Color.black, 0.2f);
+        cb.highlightedColor = Color.Lerp(bgColor, Color.white, 0.3f);
+        cb.pressedColor     = Color.Lerp(bgColor, Color.black, 0.25f);
+        cb.selectedColor    = cb.highlightedColor;
         btn.colors = cb;
 
-        // Label child
-        var lblGo   = new GameObject("Label");
+        // Label
+        var lblGo = new GameObject("Label");
         lblGo.transform.SetParent(btnGo.transform, false);
-        var lblRect = lblGo.AddComponent<RectTransform>();
-        lblRect.anchorMin = Vector2.zero;
-        lblRect.anchorMax = Vector2.one;
-        lblRect.sizeDelta = Vector2.zero;
+        var lblRt = lblGo.AddComponent<RectTransform>();
+        lblRt.anchorMin = Vector2.zero;
+        lblRt.anchorMax = Vector2.one;
+        lblRt.sizeDelta = Vector2.zero;
 
         var tmp = lblGo.AddComponent<TextMeshProUGUI>();
         tmp.text      = label;
-        tmp.fontSize  = size.y > 60f ? 28f : 22f;
+        tmp.fontSize  = fontSize;
         tmp.fontStyle = FontStyles.Bold;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.color     = Color.white;
+        tmp.color     = textColor;
 
         return btnGo;
     }
 
-    // ── Diagnostic menu item ──────────────────────────────────────────────────
+    /// <summary>Wires a UnityEvent persistent listener.</summary>
+    private static void WireButton(GameObject btnGo, UnityEngine.Events.UnityAction action)
+    {
+        var btn = btnGo.GetComponent<Button>();
+        if (btn == null) return;
+        btn.onClick.RemoveAllListeners();
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(btn.onClick, action);
+    }
+
+    // ── Diagnostic ────────────────────────────────────────────────────────────
     [MenuItem("Tools/Toxland/Check Build Settings", priority = 2)]
     private static void CheckBuildSettings()
     {
@@ -328,7 +463,6 @@ public static class WelcomeSceneCreator
         string report = $"Build Settings ({scenes.Length} scenes):\n";
         for (int i = 0; i < scenes.Length; i++)
             report += $"  [{i}] {(scenes[i].enabled ? "✅" : "❌")} {scenes[i].path}\n";
-
         EditorUtility.DisplayDialog("Build Settings", report, "OK");
         Debug.Log(report);
     }

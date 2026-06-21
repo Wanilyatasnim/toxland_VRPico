@@ -175,16 +175,18 @@ public class DesktopMouseClicker : MonoBehaviour
     private (GameObject hitObj, Button button) RaycastAllCanvases()
     {
         Ray ray = _cam.ScreenPointToRay(Input.mousePosition);
-        var raycasters = FindObjectsByType<GraphicRaycaster>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+        // Search Canvas components directly (works with both GraphicRaycaster
+        // AND TrackedDeviceGraphicRaycaster, which inherits BaseRaycaster not GraphicRaycaster)
+        var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude);
 
         float nearest = float.MaxValue;
         Button nearestBtn = null;
         GameObject nearestObj = null;
 
-        foreach (var raycaster in raycasters)
+        foreach (var canvas in canvases)
         {
-            var canvas = raycaster.GetComponent<Canvas>();
-            if (canvas == null || canvas.renderMode != RenderMode.WorldSpace) continue;
+            if (canvas.renderMode != RenderMode.WorldSpace) continue;
 
             // Use camera-ray to plane intersection for each button in this canvas
             foreach (var graphic in canvas.GetComponentsInChildren<Graphic>())

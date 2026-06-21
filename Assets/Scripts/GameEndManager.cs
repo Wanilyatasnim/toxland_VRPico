@@ -35,7 +35,7 @@ public class GameEndManager : MonoBehaviour
     private static void AutoAttach()
     {
         // Only attach in scenes that have a PlayerToken (i.e. MainScene)
-        if (FindObjectsByType<PlayerToken>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length == 0)
+        if (FindObjectsByType<PlayerToken>(FindObjectsInactive.Include).Length == 0)
             return;
 
         // Prevent duplicate instances (e.g. if domain reload is off)
@@ -150,7 +150,7 @@ public class GameEndManager : MonoBehaviour
         ScoreManager.scoreValue = 0;
 
         // Find and reset the PlayerToken
-        var token = FindFirstObjectByType<PlayerToken>();
+        var token = FindAnyObjectByType<PlayerToken>();
         if (token != null)
             token.resetPosition();
 
