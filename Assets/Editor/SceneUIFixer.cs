@@ -142,6 +142,17 @@ public class SceneUIFixer : EditorWindow
                 // Let's print out if input references are set or empty
                 PrintControllerActions(controller);
 
+                // Auto-bind actions if they are empty
+                bool posEmpty = controller.positionAction.reference == null;
+                bool rotEmpty = controller.rotationAction.reference == null;
+                bool selectEmpty = controller.selectAction.reference == null;
+                bool uiPressEmpty = controller.uiPressAction.reference == null;
+                if (posEmpty || rotEmpty || selectEmpty || uiPressEmpty)
+                {
+                    bool isLeft = controller.name.ToLower().Contains("left");
+                    FixControllerBindings(controller, isLeft);
+                }
+
                 // Let's look for any type of Interactor
                 bool hasInteractor = false;
                 var components = controller.GetComponents<Component>();
@@ -185,6 +196,72 @@ public class SceneUIFixer : EditorWindow
         }
 
         Debug.Log("========== SCENE UI FIXES COMPLETE ==========");
+    }
+
+    private static void FixControllerBindings(ActionBasedController controller, bool isLeft)
+    {
+        string prefix = isLeft ? "XRI Left" : "XRI Right";
+        Debug.Log($"🔧 Auto-binding actions for {controller.name} using prefix '{prefix}'...");
+        
+        string[] guids = AssetDatabase.FindAssets("XRI Default Input Actions t:InputActionAsset");
+        if (guids.Length == 0)
+        {
+            Debug.LogError("❌ Could not find XRI Default Input Actions asset!");
+            return;
+        }
+        
+        string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+        Object[] subAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+        
+        UnityEngine.InputSystem.InputActionReference posRef = null;
+        UnityEngine.InputSystem.InputActionReference rotRef = null;
+        UnityEngine.InputSystem.InputActionReference selectRef = null;
+        UnityEngine.InputSystem.InputActionReference uiPressRef = null;
+        UnityEngine.InputSystem.InputActionReference activateRef = null;
+        
+        foreach (var sub in subAssets)
+        {
+            if (sub is UnityEngine.InputSystem.InputActionReference reference)
+            {
+                string refName = reference.name;
+                if (refName == $"{prefix}/Position") posRef = reference;
+                else if (refName == $"{prefix}/Rotation") rotRef = reference;
+                else if (refName == $"{prefix}/Select") selectRef = reference;
+                else if (refName == $"{prefix}/UI Press") uiPressRef = reference;
+                else if (refName == $"{prefix}/Activate") activateRef = reference;
+            }
+        }
+        
+        SerializedObject so = new SerializedObject(controller);
+        
+        if (posRef != null)
+        {
+            so.FindProperty("m_PositionAction.m_UseReference").boolValue = true;
+            so.FindProperty("m_PositionAction.m_Reference").objectReferenceValue = posRef;
+        }
+        if (rotRef != null)
+        {
+            so.FindProperty("m_RotationAction.m_UseReference").boolValue = true;
+            so.FindProperty("m_RotationAction.m_Reference").objectReferenceValue = rotRef;
+        }
+        if (selectRef != null)
+        {
+            so.FindProperty("m_SelectAction.m_UseReference").boolValue = true;
+            so.FindProperty("m_SelectAction.m_Reference").objectReferenceValue = selectRef;
+        }
+        if (uiPressRef != null)
+        {
+            so.FindProperty("m_UiPressAction.m_UseReference").boolValue = true;
+            so.FindProperty("m_UiPressAction.m_Reference").objectReferenceValue = uiPressRef;
+        }
+        if (activateRef != null)
+        {
+            so.FindProperty("m_ActivateAction.m_UseReference").boolValue = true;
+            so.FindProperty("m_ActivateAction.m_Reference").objectReferenceValue = activateRef;
+        }
+        
+        so.ApplyModifiedProperties();
+        Debug.Log($"   ✅ Successfully bound all actions for {controller.name}.");
     }
 
     private static void PrintControllerActions(ActionBasedController controller)
