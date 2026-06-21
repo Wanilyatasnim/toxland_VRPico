@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using System.Collections.Generic;
 
 public class SceneUIFixer : EditorWindow
 {
@@ -83,7 +84,50 @@ public class SceneUIFixer : EditorWindow
             }
         }
 
-        // 3. Fix XR Controllers (Add lasers if they only have ActionBasedController)
+        // 3. Fix InputActionManager
+        var origin = GameObject.Find("XR Origin (VR)") ?? GameObject.Find("XR Origin") ?? GameObject.Find("XROrigin");
+        if (origin != null)
+        {
+            var iam = origin.GetComponent<InputActionManager>();
+            if (iam != null)
+            {
+                Debug.Log("🔧 Checking InputActionManager on XR Origin...");
+                SerializedObject so = new SerializedObject(iam);
+                SerializedProperty actionAssetsProp = so.FindProperty("m_ActionAssets");
+                
+                if (actionAssetsProp != null)
+                {
+                    bool isEmpty = actionAssetsProp.arraySize == 0;
+                    if (isEmpty)
+                    {
+                        Debug.LogWarning("⚠️ InputActionManager has no Action Assets! Finding 'XRI Default Input Actions'...");
+                        string[] guids = AssetDatabase.FindAssets("XRI Default Input Actions t:InputActionAsset");
+                        if (guids.Length > 0)
+                        {
+                            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.InputSystem.InputActionAsset>(path);
+                            if (asset != null)
+                            {
+                                actionAssetsProp.InsertArrayElementAtIndex(0);
+                                actionAssetsProp.GetArrayElementAtIndex(0).objectReferenceValue = asset;
+                                so.ApplyModifiedProperties();
+                                Debug.Log($"✅ Successfully added '{asset.name}' to InputActionManager.");
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogError("❌ Could not find 'XRI Default Input Actions' asset in the project!");
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("✅ InputActionManager has registered action assets.");
+                    }
+                }
+            }
+        }
+
+        // 4. Fix XR Controllers (Add lasers if they only have ActionBasedController)
         var controllers = Object.FindObjectsByType<ActionBasedController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         if (controllers.Length == 0)
         {
@@ -95,7 +139,10 @@ public class SceneUIFixer : EditorWindow
             {
                 Debug.Log($"🔧 Checking controller: '{controller.name}'");
                 
-                // Let's look for any type of Interactor (checking by name to avoid namespace variations)
+                // Let's print out if input references are set or empty
+                PrintControllerActions(controller);
+
+                // Let's look for any type of Interactor
                 bool hasInteractor = false;
                 var components = controller.GetComponents<Component>();
                 foreach (var c in components)
@@ -110,18 +157,11 @@ public class SceneUIFixer : EditorWindow
                 if (!hasInteractor)
                 {
                     Debug.Log($"🔧 Controller '{controller.name}' has no Interactor. Adding XRRayInteractor components...");
-                    
-                    // Add XRRayInteractor
                     var rayInteractor = controller.gameObject.AddComponent<XRRayInteractor>();
-                    
-                    // Add LineRenderer
                     var lineRenderer = controller.gameObject.AddComponent<LineRenderer>();
-                    // Set default settings for LineRenderer so it is thin and visible
                     lineRenderer.startWidth = 0.01f;
                     lineRenderer.endWidth = 0.01f;
                     lineRenderer.useWorldSpace = true;
-                    
-                    // Add XRInteractorLineVisual
                     var lineVisual = controller.gameObject.AddComponent<XRInteractorLineVisual>();
                     
                     Debug.Log($"✅ Added XRRayInteractor, LineRenderer, and XRInteractorLineVisual to '{controller.name}'.");
@@ -133,12 +173,7 @@ public class SceneUIFixer : EditorWindow
             }
         }
 
-        // 4. Scan & Output XR Origin hierarchy to help diagnose controllers
-        GameObject origin = GameObject.Find("XR Origin (VR)");
-        if (origin == null) origin = GameObject.Find("XR Origin");
-        if (origin == null) origin = GameObject.Find("XROrigin");
-        if (origin == null && Camera.main != null) origin = Camera.main.transform.root.gameObject;
-
+        // 5. Scan & Output XR Origin hierarchy to help diagnose controllers
         if (origin != null)
         {
             Debug.Log($"ℹ️ [HIERARCHY] Found XR Origin: '{origin.name}'. Scanning children for controllers...");
@@ -150,6 +185,21 @@ public class SceneUIFixer : EditorWindow
         }
 
         Debug.Log("========== SCENE UI FIXES COMPLETE ==========");
+    }
+
+    private static void PrintControllerActions(ActionBasedController controller)
+    {
+        // Check if actions are unassigned
+        bool posEmpty = controller.positionAction.reference == null;
+        bool rotEmpty = controller.rotationAction.reference == null;
+        bool selectEmpty = controller.selectAction.reference == null;
+        bool uiPressEmpty = controller.uiPressAction.reference == null;
+
+        Debug.Log($"   [INPUT ACTIONS] '{controller.name}': " +
+                  $"Position={(!posEmpty ? controller.positionAction.reference.name : "EMPTY")}, " +
+                  $"Rotation={(!rotEmpty ? controller.rotationAction.reference.name : "EMPTY")}, " +
+                  $"Select={(!selectEmpty ? controller.selectAction.reference.name : "EMPTY")}, " +
+                  $"UIPress={(!uiPressEmpty ? controller.uiPressAction.reference.name : "EMPTY")}");
     }
 
     private static void ScanHierarchy(Transform current, string indent)
