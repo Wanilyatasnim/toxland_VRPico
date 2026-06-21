@@ -1,53 +1,66 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
-/// GameEndManager — shows a "TAMAT! / Congratulations" end-screen overlay
-/// when the player reaches the final tile.
-///
-/// Subscribes to PlayerToken.OnGameWon (static Action<int>) — fired with the
-/// final score value.
-///
-/// Auto-creates its own Canvas UI at runtime so no scene prefab is needed.
+/// GameEndManager — manages the Game End popup canvas.
+/// Automatically activates the canvas and sets the score when PlayerToken.OnGameWon is fired.
 /// </summary>
 [DisallowMultipleComponent]
 public class GameEndManager : MonoBehaviour
 {
-    // ── Singleton ─────────────────────────────────────────────────────────────
     private static GameEndManager _instance;
+    
+    private GameObject _canvasGo;
+    private TextMeshProUGUI _scoreText;
+    private TextMeshProUGUI _starsText;
 
-    // ── Runtime UI references ─────────────────────────────────────────────────
-    private GameObject  _overlayRoot;
-    private bool        _showing = false;
-    private int         _finalScore;
-
-    // GUI style cache
-    private GUIStyle _panelStyle;
-    private GUIStyle _titleStyle;
-    private GUIStyle _scoreStyle;
-    private GUIStyle _subStyle;
-    private GUIStyle _btnStyle;
-    private bool     _stylesReady;
-    private Texture2D _bgTex;
-
-    // ── Auto-attach ───────────────────────────────────────────────────────────
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AutoAttach()
     {
-        // Only attach in scenes that have a PlayerToken (i.e. MainScene)
-        if (FindObjectsByType<PlayerToken>(FindObjectsInactive.Include).Length == 0)
-            return;
-
-        // Prevent duplicate instances (e.g. if domain reload is off)
+        // Only attach if a PlayerToken exists in the scene
+        if (FindObjectsByType<PlayerToken>(FindObjectsInactive.Include).Length == 0) return;
         if (_instance != null) return;
-
+        
         var go = new GameObject("GameEndManager");
-        // NOTE: Do NOT DontDestroyOnLoad — this is intentionally scene-scoped
         _instance = go.AddComponent<GameEndManager>();
-        Debug.Log("[GameEndManager] Auto-attached and listening for OnGameWon.");
     }
 
-    // ── MonoBehaviour ─────────────────────────────────────────────────────────
+    private void Awake()
+    {
+        // Find the pre-built canvas (even if it's inactive)
+        _canvasGo = GameObject.Find("GameEndCanvas");
+        if (_canvasGo == null)
+        {
+            // Search inactive objects
+            foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
+            {
+                if (canvas.name == "GameEndCanvas" && canvas.gameObject.scene.isLoaded)
+                {
+                    _canvasGo = canvas.gameObject;
+                    break;
+                }
+            }
+        }
+
+        if (_canvasGo != null)
+        {
+            var tr = _canvasGo.transform;
+            _scoreText = tr.Find("InnerBG/ScoreText")?.GetComponent<TextMeshProUGUI>();
+            _starsText = tr.Find("InnerBG/StarsText")?.GetComponent<TextMeshProUGUI>();
+
+            var replayBtn = tr.Find("InnerBG/BtnReplay")?.GetComponent<Button>();
+            var quitBtn   = tr.Find("InnerBG/BtnQuit")?.GetComponent<Button>();
+
+            if (replayBtn != null) replayBtn.onClick.AddListener(RestartGame);
+            if (quitBtn != null)   quitBtn.onClick.AddListener(QuitGame);
+        }
+        else
+        {
+            Debug.LogWarning("[GameEndManager] GameEndCanvas not found in scene. Run 'Tools -> Toxland -> Setup Game End Popup'.");
+        }
+    }
+
     private void OnEnable()
     {
         PlayerToken.OnGameWon += HandleGameWon;
@@ -58,150 +71,49 @@ public class GameEndManager : MonoBehaviour
         PlayerToken.OnGameWon -= HandleGameWon;
     }
 
-    private void OnDestroy()
-    {
-        PlayerToken.OnGameWon -= HandleGameWon;
-        if (_bgTex != null) Destroy(_bgTex);
-    }
-
-    // ── Win handler ───────────────────────────────────────────────────────────
     private void HandleGameWon(int score)
     {
-        if (_showing) return;
-        _finalScore = score;
-        _showing    = true;
-        Debug.Log($"[GameEndManager] Game won! Final score: {score}");
-    }
+        if (_canvasGo == null) return;
+        
+        if (_scoreText != null) _scoreText.text = $"Jumlah Markah: {score}";
+        if (_starsText != null) 
+            _starsText.text = score >= 20 ? "★ ★ ★" : score >= 10 ? "★ ★ ☆" : "★ ☆ ☆";
 
-    // ── GUI ───────────────────────────────────────────────────────────────────
-    private void OnGUI()
-    {
-        if (!_showing) return;
-
-        EnsureStyles();
-
-        float sw = Screen.width;
-        float sh = Screen.height;
-
-        // Full-screen dim overlay
-        GUI.color = new Color(0f, 0f, 0f, 0.72f);
-        GUI.DrawTexture(new Rect(0, 0, sw, sh), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        // Central panel
-        float pw = Mathf.Min(600f, sw * 0.85f);
-        float ph = 380f;
-        float px = (sw - pw) * 0.5f;
-        float py = (sh - ph) * 0.5f;
-
-        // Panel background
-        GUI.color = new Color(0.05f, 0.08f, 0.15f, 0.97f);
-        GUI.DrawTexture(new Rect(px, py, pw, ph), _bgTex);
-        GUI.color = Color.white;
-
-        // Gold top accent bar
-        GUI.color = new Color(1f, 0.82f, 0.1f);
-        GUI.DrawTexture(new Rect(px, py, pw, 6f), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        float innerX = px + 30f;
-        float innerW = pw - 60f;
-
-        // 🏆 emoji / title
-        GUI.Label(new Rect(innerX, py + 28f, innerW, 60f), "🏆  TAMAT!", _titleStyle);
-
-        // Congrats text
-        GUI.Label(new Rect(innerX, py + 96f, innerW, 36f),
-                  "Tahniah! Anda telah mencapai petak akhir!", _subStyle);
-
-        // Score display
-        GUI.Label(new Rect(innerX, py + 150f, innerW, 60f),
-                  $"Jumlah Markah: {_finalScore}", _scoreStyle);
-
-        // Stars row (visual)
-        string stars = _finalScore >= 20 ? "★ ★ ★" : _finalScore >= 10 ? "★ ★ ☆" : "★ ☆ ☆";
-        GUI.Label(new Rect(innerX, py + 218f, innerW, 44f), stars, _titleStyle);
-
-        // Buttons
-        float btnW = (pw - 90f) * 0.5f;
-        float btnY = py + ph - 80f;
-
-        // Restart button
-        GUI.backgroundColor = new Color(0.15f, 0.55f, 0.95f);
-        if (GUI.Button(new Rect(px + 30f, btnY, btnW, 48f), "🔄  Main Semula", _btnStyle))
+        // Re-center canvas in front of the player's current view just in case they moved
+        var cam = Camera.main;
+        if (cam == null)
         {
-            RestartGame();
+            var origin = GameObject.Find("XR Origin (VR)") ?? GameObject.Find("XR Origin") ?? GameObject.Find("XROrigin");
+            if (origin != null) cam = origin.GetComponentInChildren<Camera>();
         }
 
-        // Main Menu button
-        GUI.backgroundColor = new Color(0.9f, 0.35f, 0.2f);
-        if (GUI.Button(new Rect(px + 30f + btnW + 30f, btnY, btnW, 48f), "🏠  Menu Utama", _btnStyle))
+        if (cam != null)
         {
-            BackToMenu();
+            _canvasGo.transform.position = cam.transform.position + cam.transform.forward * 0.8f;
+            _canvasGo.transform.rotation = Quaternion.LookRotation(_canvasGo.transform.position - cam.transform.position);
         }
 
-        GUI.backgroundColor = Color.white;
+        _canvasGo.SetActive(true);
+        Debug.Log($"[GameEndManager] Game won! Final score: {score}. Displaying popup.");
     }
 
-    // ── Actions ───────────────────────────────────────────────────────────────
     private void RestartGame()
     {
-        _showing = false;
+        if (_canvasGo != null) _canvasGo.SetActive(false);
         ScoreManager.scoreValue = 0;
-
-        // Find and reset the PlayerToken
+        
         var token = FindAnyObjectByType<PlayerToken>();
-        if (token != null)
-            token.resetPosition();
+        if (token != null) token.resetPosition();
 
         Debug.Log("[GameEndManager] Game restarted.");
     }
 
-    private void BackToMenu()
+    private void QuitGame()
     {
-        _showing = false;
-        ScoreManager.scoreValue = 0;
-
-        // Load WelcomeScene if it's in build settings, otherwise just restart
-        int sceneCount = UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings;
-        if (sceneCount > 1)
-            SceneManager.LoadScene(0);
-        else
-            RestartGame();
-    }
-
-    // ── Style builder ─────────────────────────────────────────────────────────
-    private void EnsureStyles()
-    {
-        if (_stylesReady) return;
-
-        _bgTex = new Texture2D(1, 1);
-        _bgTex.SetPixel(0, 0, Color.white);
-        _bgTex.Apply();
-
-        _titleStyle = new GUIStyle();
-        _titleStyle.fontSize  = 42;
-        _titleStyle.fontStyle = FontStyle.Bold;
-        _titleStyle.alignment = TextAnchor.MiddleCenter;
-        _titleStyle.normal.textColor = new Color(1f, 0.82f, 0.1f);
-
-        _scoreStyle = new GUIStyle();
-        _scoreStyle.fontSize  = 34;
-        _scoreStyle.fontStyle = FontStyle.Bold;
-        _scoreStyle.alignment = TextAnchor.MiddleCenter;
-        _scoreStyle.normal.textColor = Color.white;
-
-        _subStyle = new GUIStyle();
-        _subStyle.fontSize  = 18;
-        _subStyle.wordWrap  = true;
-        _subStyle.alignment = TextAnchor.MiddleCenter;
-        _subStyle.normal.textColor = new Color(0.8f, 0.9f, 1f);
-
-        _btnStyle = new GUIStyle(GUI.skin.button);
-        _btnStyle.fontSize  = 18;
-        _btnStyle.fontStyle = FontStyle.Bold;
-        _btnStyle.normal.textColor = Color.white;
-
-        _stylesReady = true;
+        Debug.Log("[GameEndManager] Quit requested.");
+        Application.Quit();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
     }
 }
