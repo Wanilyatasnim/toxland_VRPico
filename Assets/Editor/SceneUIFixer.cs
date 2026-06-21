@@ -172,17 +172,27 @@ public class SceneUIFixer : EditorWindow
                     continue;
                 }
 
-                // 1. Destroy any existing raycaster/interactor components first to start clean
-                var oldRayInteractors = controller.GetComponents<Component>();
-                foreach (var c in oldRayInteractors)
+                // 1. Destroy components in dependency order: LineVisual -> Interactor -> LineRenderer
+                // (Visual depends on LineRenderer, so visual must be destroyed first)
+                var oldVisual = controller.GetComponent(visualType);
+                if (oldVisual != null)
                 {
-                    if (c != null && (c.GetType() == rayType || 
-                                      c.GetType() == visualType || 
-                                      c.GetType() == typeof(LineRenderer)))
-                    {
-                        Debug.Log($"   🔧 Destroying old component '{c.GetType().Name}' on '{controller.name}'...");
-                        Object.DestroyImmediate(c);
-                    }
+                    Debug.Log($"   🔧 Destroying old component '{oldVisual.GetType().Name}' on '{controller.name}'...");
+                    Object.DestroyImmediate(oldVisual);
+                }
+
+                var oldRay = controller.GetComponent(rayType);
+                if (oldRay != null)
+                {
+                    Debug.Log($"   🔧 Destroying old component '{oldRay.GetType().Name}' on '{controller.name}'...");
+                    Object.DestroyImmediate(oldRay);
+                }
+
+                var oldLr = controller.GetComponent<LineRenderer>();
+                if (oldLr != null)
+                {
+                    Debug.Log($"   🔧 Destroying old component '{oldLr.GetType().Name}' on '{controller.name}'...");
+                    Object.DestroyImmediate(oldLr);
                 }
 
                 // 2. Add the correct XRI components
