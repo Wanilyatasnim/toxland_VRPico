@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,6 +6,12 @@ using TMPro;
 
 public class PlayerToken : MonoBehaviour
 {
+    /// <summary>
+    /// Fired when the player reaches the final tile.
+    /// Argument is the final score value.
+    /// GameEndManager subscribes to this to show the end screen.
+    /// </summary>
+    public static System.Action<int> OnGameWon;
     [Tooltip("The tile the PlayerToken will start on.")]
     public Tile startingTile;
     public DiceManager diceManager;
@@ -202,6 +208,9 @@ public class PlayerToken : MonoBehaviour
                 valueText.text = "Congrats! Arrive the final point!";
                 btnRollDice.SetActive(false);
                 btnRestart.SetActive(true);
+
+                // Notify GameEndManager (and any other listeners)
+                OnGameWon?.Invoke(ScoreManager.scoreValue);
                 break;
                 //move backward
                 /*if (i == spacesToMove - 1)
