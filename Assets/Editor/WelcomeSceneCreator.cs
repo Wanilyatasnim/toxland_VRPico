@@ -85,10 +85,10 @@ public static class WelcomeSceneCreator
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.dynamicPixelsPerUnit = 10f;
 
-        // TrackedDeviceGraphicRaycaster for XR ray interaction
+        // TrackedDeviceGraphicRaycaster for XR ray interaction.
+        // NOTE: TrackedDeviceGraphicRaycaster inherits GraphicRaycaster, so we only need one.
+        // DesktopMouseClicker uses FindObjectsByType<GraphicRaycaster> which finds this too.
         canvasGo.AddComponent<TrackedDeviceGraphicRaycaster>();
-        // Also add standard GraphicRaycaster for mouse fallback in editor
-        canvasGo.AddComponent<GraphicRaycaster>();
 
         // Position: 2m in front of camera, slightly above eye level
         canvasGo.transform.position   = new Vector3(0f, 1.7f, 2.5f);

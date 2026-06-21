@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using TMPro;
 
 /// <summary>
 /// GameEndManager — shows a "TAMAT! / Congratulations" end-screen overlay
@@ -35,12 +34,15 @@ public class GameEndManager : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AutoAttach()
     {
-        // Only attach in the game scene (not Welcome scene)
+        // Only attach in scenes that have a PlayerToken (i.e. MainScene)
         if (FindObjectsByType<PlayerToken>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length == 0)
-            return; // No PlayerToken → not the game scene
+            return;
+
+        // Prevent duplicate instances (e.g. if domain reload is off)
+        if (_instance != null) return;
 
         var go = new GameObject("GameEndManager");
-        DontDestroyOnLoad(go); // survives scene reloads? No — we want scene scope
+        // NOTE: Do NOT DontDestroyOnLoad — this is intentionally scene-scoped
         _instance = go.AddComponent<GameEndManager>();
         Debug.Log("[GameEndManager] Auto-attached and listening for OnGameWon.");
     }
