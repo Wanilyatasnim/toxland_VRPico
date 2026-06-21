@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.UI;
-using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Inputs;
 using System.Collections.Generic;
 
 public class SceneUIFixer : EditorWindow
@@ -176,7 +176,7 @@ public class SceneUIFixer : EditorWindow
         // 5. Scan & Output XR Origin hierarchy to help diagnose controllers
         if (origin != null)
         {
-            Debug.Log($"ℹ️ [HIERARCHY] Found XR Origin: '{origin.name}'. Scanning children for controllers...");
+            Debug.Log($"ℹ️ [HIERARCHY] Found XR Origin: '{origin.name}'. Scanning children for controllers... ");
             ScanHierarchy(origin.transform, "  ");
         }
         else
